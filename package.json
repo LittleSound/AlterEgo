@@ -1,15 +1,19 @@
 {
   "name": "telegram-ai-bot",
   "version": "1.0.50",
+  "module": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --watch src/index.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "elysia": "latest"
   },
   "devDependencies": {
-    "bun-types": "latest"
-  },
-  "module": "src/index.js"
+    "@antfu/eslint-config": "^5.2.2",
+    "bun-types": "latest",
+    "eslint": "^9.34.0"
+  }
 }
