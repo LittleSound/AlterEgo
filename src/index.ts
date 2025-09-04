@@ -51,6 +51,11 @@ const app = new Elysia()
       })
     })
 
+    // 不是 @ 自己的消息，那就默默记录下来吧
+    bot.on('message:entities', (ctx) => {
+      silentlyRecordMessage(ctx)
+    })
+
     // 处理回复消息
     bot.on('message').filter(ctx => !!(ctx.chat.type !== 'private' && ctx.msg.reply_to_message && ctx.msg.text), (ctx) => {
       const session = getGroupChatSession(ctx.chat.id)
