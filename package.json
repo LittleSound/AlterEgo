@@ -11,7 +11,8 @@
   "dependencies": {
     "@yolk-oss/elysia-env": "^3.0.0",
     "elysia": "latest",
-    "grammy": "^1.38.2"
+    "grammy": "^1.38.2",
+    "xsai": "^0.4.0-beta.3"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^5.2.2",
