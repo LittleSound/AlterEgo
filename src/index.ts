@@ -32,11 +32,17 @@ const app = new Elysia()
     })
 
     // 处理 @ 提及
-    bot.on('::mention', (ctx) => {
+    bot.on('message:entities').filter((ctx) => {
       if (!ctx.message?.text) {
-        ctx.reply('🔴 Sorry, I can only handle text messages for now.')
-        return
+        return false
       }
+      // 检查是否提及了机器人
+      const mentions = ctx.entities('mention')
+      const isBotMentioned = mentions.some(
+        entity => entity.text === `@${ctx.me.username}`,
+      )
+      return isBotMentioned
+    }, (ctx) => {
       const session = getGroupChatSession(ctx.chat.id)
       handleTextMessage(ctx, {
         addUserMessage: content => session.addUserMessage(content, { userId: ctx.from?.id || 0, userName: ctx.from?.first_name || 'User' }),
