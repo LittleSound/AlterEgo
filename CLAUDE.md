@@ -11,7 +11,7 @@
   - 提供完整的 TypeScript 支持
   - 支持 webhook 和 长轮询 两种模式
   - 当前使用 webhook 模式集成到 ElysiaJS
-  
+
 - **ElysiaJS (latest)**: 高性能 Web 框架
   - 专为 Bun 运行时优化
   - 支持高达 21x 于 Express 的性能
@@ -112,7 +112,7 @@ OPENAI_BASE_URL=https://api.openai.com/v1/
 
 ## 📝 更新记录
 
-- **2025-09-04**: 
+- **2025-09-04**:
   - 项目初始化
   - 集成 grammY + ElysiaJS + xsAI
   - 实现基础 webhook 机器人功能
