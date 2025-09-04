@@ -4,6 +4,7 @@ import { Elysia } from 'elysia'
 import { Bot, webhookCallback } from 'grammy'
 import { appEnvConfig } from './env'
 import { log } from './log'
+import { addAssistantMessage, addUserMessage, getMemoryStats } from './memory'
 import { systemPrompt } from './prompt'
 import { invoke } from './utils'
 
@@ -18,6 +19,11 @@ const app = new Elysia()
       ctx.reply('🤖 Hello. Hello. I am Alter Ego! I\'m a Chat Bot. You can say "Hi" with me.')
     })
 
+    bot.command('memory', (ctx) => {
+      const stats = getMemoryStats()
+      ctx.reply(`📊 Memory Stats:\n• Active sessions: ${stats.sessionsCount}\n• Total messages: ${stats.totalMessages}\n\nI remember our conversations for today! 💭`)
+    })
+
     bot.on('message', (ctx) => {
       // TODO 处理非文本消息
       if (!ctx.message.text) {
@@ -30,47 +36,55 @@ const app = new Elysia()
 
       const messageText = ctx.message.text
       const userName = ctx.from?.first_name || 'User'
+      const userId = ctx.from?.id || 0
+      const chatId = ctx.chat.id
       const replyTextList: string[] = []
 
-      log(`[MSG] ${userName}:`, messageText)
+      log(`[MSG] ${userName} (${userId}):`, messageText)
 
       invoke(async () => {
-        theMsg = await ctx.reply(`🛜 Connecting...`)
+        theMsg = await ctx.reply(`🔵 Connecting...`)
+
+        const chatHistory = addUserMessage(userId, userName, chatId, messageText)
+        const messages = systemPrompt().concat(chatHistory)
 
         const { textStream } = streamText({
           apiKey: env.AI_OPENROUTER_API_KEY!,
           baseURL: env.AI_OPENROUTER_BASE_URL,
-          messages: systemPrompt().concat([
-            {
-              content: messageText,
-              role: 'user',
-            },
-          ]),
+          messages,
           model: env.AI_LLM_DEFAULT_MODEL,
         })
+
         for await (const textPart of textStream) {
           if (Date.now() - lastTime > EDIT_MESSAGE_INTERVAL) {
             lastTime = Date.now()
             await ctx.api.editMessageText(
               theMsg.chat.id,
               theMsg.message_id,
-              `${replyTextList.join('')}\n⌨️ Typing...`,
+              `${replyTextList.join('')}\n\n🟢 Typing...`,
             )
           }
 
           replyTextList.push(textPart)
         }
 
-        log(`[REPLY] Alter Ego:`, replyTextList.join(''))
+        const finalResponse = replyTextList.join('')
+        log(`[REPLY] Alter Ego:`, finalResponse)
+
+        addAssistantMessage(userId, userName, chatId, finalResponse)
 
         await ctx.api.editMessageText(
           theMsg.chat.id,
           theMsg.message_id,
-          `${replyTextList.join('')}`,
+          finalResponse,
         )
+
+        // 输出内存统计
+        const stats = getMemoryStats()
+        log(`[MEMORY] Sessions: ${stats.sessionsCount}, Total messages: ${stats.totalMessages}`)
       }).catch(async (error) => {
         log('Error processing message:', error)
-        const errorText = '⚠️ 处理消息时出现了一些错误。我也不知道为什么…'
+        const errorText = '🔴 Something went wrong. I don\'t know what to say next...'
         if (theMsg) {
           await ctx.api.editMessageText(
             theMsg.chat.id,
