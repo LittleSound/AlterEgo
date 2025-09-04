@@ -9,6 +9,7 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
+    "@yolk-oss/elysia-env": "^3.0.0",
     "elysia": "latest"
   },
   "devDependencies": {
