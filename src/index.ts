@@ -1,3 +1,4 @@
+import type { Context } from 'grammy'
 import type { Message } from 'grammy/types'
 import { streamText } from '@xsai/stream-text'
 import { Elysia } from 'elysia'
@@ -24,12 +25,60 @@ const app = new Elysia()
       ctx.reply(`📊 Memory Stats:\n• Active sessions: ${stats.sessionsCount}\n• Total messages: ${stats.totalMessages}\n\nI remember our conversations for today! 💭`)
     })
 
-    bot.on('message', (ctx) => {
-      // TODO 处理非文本消息
-      if (!ctx.message.text) {
-        ctx.reply('Sorry, I can only handle text messages for now.')
+    // 处理 @ 提及
+    bot.on('::mention', (ctx) => {
+      if (!ctx.message?.text) {
+        ctx.reply('🔴 Sorry, I can only handle text messages for now.')
         return
       }
+      handleTextMessage(ctx, env)
+    })
+
+    // 处理回复消息
+    bot.on('message').filter(ctx => !!ctx.msg.reply_to_message, (ctx) => {
+      if (!ctx.message?.text) {
+        ctx.reply('🔴 Sorry, I can only handle text messages for now.')
+        return
+      }
+      handleTextMessage(ctx, env)
+    })
+
+    // 处理私聊消息
+    bot.on('message:text').filter(ctx => ctx.chat.type === 'private', (ctx) => {
+      handleTextMessage(ctx, env)
+    })
+
+    // 群聊中的普通消息 - 仅记录，不回复（需要机器人是管理员）
+    // 提及和回复消息由上面的处理器处理并记录，所以这里需要跳过记录
+    bot.on('message:text').filter(ctx =>
+      (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup')
+      && !ctx.message.text?.includes('@') // 不包含@提及
+      && !ctx.msg.reply_to_message, // 不是回复消息
+    (ctx) => {
+      silentlyRecordMessage(ctx)
+    })
+
+    function silentlyRecordMessage(ctx: Context) {
+      if (!ctx.message?.text)
+        return
+
+      const messageText = ctx.message.text
+      const userName = ctx.from?.first_name || 'User'
+      const userId = ctx.from?.id || 0
+      const chatId = ctx.chat?.id
+
+      if (!chatId)
+        return
+
+      // 静默记录消息到聊天历史
+      addUserMessage(userId, userName, chatId, messageText)
+
+      log(`[SILENT] ${userName} (${userId}) in ${ctx.chat?.title || 'group'}:`, messageText)
+    }
+
+    function handleTextMessage(ctx: Context, env: any) {
+      if (!ctx.message?.text || !ctx.chat?.id)
+        return
 
       let theMsg: Message.TextMessage
       let lastTime = Date.now()
@@ -40,12 +89,16 @@ const app = new Elysia()
       const chatId = ctx.chat.id
       const replyTextList: string[] = []
 
-      log(`[MSG] ${userName} (${userId}):`, messageText)
+      // 清理群聊中的 @ 提及
+      const cleanText = messageText.replace(/@\w+\s*/, '').trim()
+      const finalText = cleanText || messageText
+
+      log(`[MSG] ${userName} (${userId}) in ${ctx.chat.type}:`, finalText)
 
       invoke(async () => {
         theMsg = await ctx.reply(`🔵 Connecting...`)
 
-        const chatHistory = addUserMessage(userId, userName, chatId, messageText)
+        const chatHistory = addUserMessage(userId, userName, chatId, finalText)
         const messages = systemPrompt().concat(chatHistory)
 
         const { textStream } = streamText({
@@ -61,7 +114,7 @@ const app = new Elysia()
             await ctx.api.editMessageText(
               theMsg.chat.id,
               theMsg.message_id,
-              `${replyTextList.join('')}\n\n🟢 Typing...`,
+              `🟢 Typing...\n\n${replyTextList.join('')}...`,
             )
           }
 
@@ -96,7 +149,7 @@ const app = new Elysia()
           await ctx.reply(`${errorText}`)
         }
       })
-    })
+    }
 
     return { bot }
   })
