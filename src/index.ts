@@ -12,6 +12,11 @@ import { invoke } from './utils'
 
 const EDIT_MESSAGE_INTERVAL = 1000
 
+function cleanAIResponse(text: string): string {
+  // 清理 AI 回复开头的 [...]： 格式
+  return text.replace(/^\s*\[[^\]]*\]:\s*/, '')
+}
+
 const app = new Elysia()
   .use(appEnvConfig)
   .derive(({ env }) => {
@@ -128,19 +133,21 @@ const app = new Elysia()
         })
 
         for await (const textPart of textStream) {
+          replyTextList.push(textPart)
+
           if (Date.now() - lastTime > EDIT_MESSAGE_INTERVAL) {
             lastTime = Date.now()
+            const cleanedPartial = cleanAIResponse(replyTextList.join(''))
             await ctx.api.editMessageText(
               theMsg.chat.id,
               theMsg.message_id,
-              `🟢 Typing...\n\n${replyTextList.join('')}...`,
+              `🟢 Typing...\n\n${cleanedPartial}...`,
             )
           }
-
-          replyTextList.push(textPart)
         }
 
-        const finalResponse = replyTextList.join('')
+        const finalResponse = cleanAIResponse(replyTextList.join(''))
+
         log(`[REPLY] Alter Ego:`, finalResponse)
 
         option.addAssistantMessage(finalResponse)
@@ -158,14 +165,20 @@ const app = new Elysia()
         log('Error processing message:', error)
         const errorText = '🔴 Something went wrong. I don\'t know what to say next...'
         if (theMsg) {
+          const partialResponse = replyTextList.length > 0
+            ? cleanAIResponse(replyTextList.join(''))
+            : ''
+          const finalErrorMsg = partialResponse
+            ? `${partialResponse}\n\n${errorText}`
+            : errorText
           await ctx.api.editMessageText(
             theMsg.chat.id,
             theMsg.message_id,
-            replyTextList.length ? `${replyTextList.join('')}\n\n${errorText}` : errorText,
+            finalErrorMsg,
           )
         }
         else {
-          await ctx.reply(`${errorText}`)
+          await ctx.reply(errorText)
         }
       })
     }
