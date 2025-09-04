@@ -1,11 +1,12 @@
 import type { Context } from 'grammy'
 import type { Message } from 'grammy/types'
+import type { GroupChatSessionMemory, PrivateChatSessionMemory } from './memory'
 import { streamText } from '@xsai/stream-text'
 import { Elysia } from 'elysia'
 import { Bot, webhookCallback } from 'grammy'
 import { appEnvConfig } from './env'
 import { log } from './log'
-import { addAssistantMessage, addUserMessage, getMemoryStats } from './memory'
+import { getGroupChatSession, getMemoryStats, getPrivateChatSession } from './memory'
 import { systemPrompt } from './prompt'
 import { invoke } from './utils'
 
@@ -31,21 +32,35 @@ const app = new Elysia()
         ctx.reply('🔴 Sorry, I can only handle text messages for now.')
         return
       }
-      handleTextMessage(ctx, env)
+      const session = getGroupChatSession(ctx.chat.id)
+      handleTextMessage(ctx, {
+        addUserMessage: content => session.addUserMessage(content, { userId: ctx.from?.id || 0, userName: ctx.from?.first_name || 'User' }),
+        addAssistantMessage: content => session.addAssistantMessage(content),
+        session,
+      })
     })
 
     // 处理回复消息
-    bot.on('message').filter(ctx => !!ctx.msg.reply_to_message, (ctx) => {
-      if (!ctx.message?.text) {
-        ctx.reply('🔴 Sorry, I can only handle text messages for now.')
-        return
-      }
-      handleTextMessage(ctx, env)
+    bot.on('message').filter(ctx => !!(ctx.chat.type !== 'private' && ctx.msg.reply_to_message && ctx.msg.text), (ctx) => {
+      const session = getGroupChatSession(ctx.chat.id)
+      handleTextMessage(ctx, {
+        addUserMessage: content => session.addUserMessage(content, { userId: ctx.from?.id || 0, userName: ctx.from?.first_name || 'User' }),
+        addAssistantMessage: content => session.addAssistantMessage(content),
+        session,
+      })
     })
 
     // 处理私聊消息
     bot.on('message:text').filter(ctx => ctx.chat.type === 'private', (ctx) => {
-      handleTextMessage(ctx, env)
+      const userName = ctx.from?.first_name || 'User'
+      const userId = ctx.from?.id || 0
+      const chatId = ctx.chat.id
+      const session = getPrivateChatSession(userId, userName, chatId)
+      handleTextMessage(ctx, {
+        addUserMessage: content => session.addUserMessage(content),
+        addAssistantMessage: content => session.addAssistantMessage(content),
+        session,
+      })
     })
 
     // 群聊中的普通消息 - 仅记录，不回复（需要机器人是管理员）
@@ -70,13 +85,17 @@ const app = new Elysia()
       if (!chatId)
         return
 
-      // 静默记录消息到聊天历史
-      addUserMessage(userId, userName, chatId, messageText)
+      const session = getGroupChatSession(chatId)
+      session.addUserMessage(messageText, { userId, userName })
 
       log(`[SILENT] ${userName} (${userId}) in ${ctx.chat?.title || 'group'}:`, messageText)
     }
 
-    function handleTextMessage(ctx: Context, env: any) {
+    function handleTextMessage(ctx: Context, option: {
+      addUserMessage: (content: string) => void
+      addAssistantMessage: (content: string) => void
+      session: GroupChatSessionMemory | PrivateChatSessionMemory
+    }) {
       if (!ctx.message?.text || !ctx.chat?.id)
         return
 
@@ -86,7 +105,6 @@ const app = new Elysia()
       const messageText = ctx.message.text
       const userName = ctx.from?.first_name || 'User'
       const userId = ctx.from?.id || 0
-      const chatId = ctx.chat.id
       const replyTextList: string[] = []
 
       // 清理群聊中的 @ 提及
@@ -98,8 +116,9 @@ const app = new Elysia()
       invoke(async () => {
         theMsg = await ctx.reply(`🔵 Connecting...`)
 
-        const chatHistory = addUserMessage(userId, userName, chatId, finalText)
-        const messages = systemPrompt().concat(chatHistory)
+        option.addUserMessage(finalText)
+        const chatHistory = option.session.toMessages()
+        const messages = systemPrompt({ userName, chatType: ctx.chat?.type }).concat(chatHistory)
 
         const { textStream } = streamText({
           apiKey: env.AI_OPENROUTER_API_KEY!,
@@ -124,7 +143,7 @@ const app = new Elysia()
         const finalResponse = replyTextList.join('')
         log(`[REPLY] Alter Ego:`, finalResponse)
 
-        addAssistantMessage(userId, userName, chatId, finalResponse)
+        option.addAssistantMessage(finalResponse)
 
         await ctx.api.editMessageText(
           theMsg.chat.id,
