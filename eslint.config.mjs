@@ -5,5 +5,8 @@ export default antfu({
   stylistic: {
     indent: 2,
     quotes: 'single',
+    rules: {
+      'padded-blocks': 'off',
+    },
   },
 })

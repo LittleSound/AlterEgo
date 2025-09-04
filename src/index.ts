@@ -1,17 +1,16 @@
-import { env } from '@yolk-oss/elysia-env'
-import { Elysia, t } from 'elysia'
+import type { Message } from 'grammy/types'
+import { streamText } from '@xsai/stream-text'
+import { Elysia } from 'elysia'
 import { Bot, webhookCallback } from 'grammy'
+import { appEnvConfig } from './env'
 import { log } from './log'
+import { systemPrompt } from './prompt'
+import { invoke } from './utils'
+
+const EDIT_MESSAGE_INTERVAL = 1000
 
 const app = new Elysia()
-  .use(
-    env({
-      TELEGRAM_BOT_TOKEN: t.String({
-        minLength: 40,
-        error: 'A valid Telegram bot token is required!',
-      }),
-    }),
-  )
+  .use(appEnvConfig)
   .derive(({ env }) => {
     const bot = new Bot(env.TELEGRAM_BOT_TOKEN)
 
@@ -19,44 +18,70 @@ const app = new Elysia()
       ctx.reply('🤖 Hello. Hello. I am Alter Ego! I\'m a Chat Bot. You can say "Hi" with me.')
     })
 
-    bot.on('message', async (ctx) => {
+    bot.on('message', (ctx) => {
       // TODO 处理非文本消息
       if (!ctx.message.text) {
-        await ctx.reply('Sorry, I can only handle text messages for now.')
+        ctx.reply('Sorry, I can only handle text messages for now.')
+        return
       }
+
+      let theMsg: Message.TextMessage
+      let lastTime = Date.now()
 
       const messageText = ctx.message.text
       const userName = ctx.from?.first_name || 'User'
+      const replyTextList: string[] = []
 
-      log('Received message:', messageText, 'from:', userName)
+      log(`[MSG] ${userName}:`, messageText)
 
-      try {
-        const theMsg = await ctx.reply(`Hello ${userName}! I received your message. Please wait a moment...`)
+      invoke(async () => {
+        theMsg = await ctx.reply(`🛜 Connecting...`)
 
-        // 等待一秒钟
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        const { textStream } = streamText({
+          apiKey: env.AI_OPENROUTER_API_KEY!,
+          baseURL: env.AI_OPENROUTER_BASE_URL,
+          messages: systemPrompt().concat([
+            {
+              content: messageText,
+              role: 'user',
+            },
+          ]),
+          model: env.AI_LLM_DEFAULT_MODEL,
+        })
+        for await (const textPart of textStream) {
+          if (Date.now() - lastTime > EDIT_MESSAGE_INTERVAL) {
+            lastTime = Date.now()
+            await ctx.api.editMessageText(
+              theMsg.chat.id,
+              theMsg.message_id,
+              `${replyTextList.join('')}\n⌨️ Typing...`,
+            )
+          }
 
-        // 第一次编辑消息内容
+          replyTextList.push(textPart)
+        }
+
+        log(`[REPLY] Alter Ego:`, replyTextList.join(''))
+
         await ctx.api.editMessageText(
           theMsg.chat.id,
           theMsg.message_id,
-          `${theMsg.text}\n\n喵～`,
+          `${replyTextList.join('')}`,
         )
-
-        // 再等待一秒钟
-        await new Promise(resolve => setTimeout(resolve, 1000))
-
-        // 第二次编辑消息内容
-        await ctx.api.editMessageText(
-          theMsg.chat.id,
-          theMsg.message_id,
-          `${theMsg.text}\n\n喵～\n\n✨ 我是 Alter Ego！`,
-        )
-      }
-      catch (error) {
+      }).catch(async (error) => {
         log('Error processing message:', error)
-        await ctx.reply('抱歉，处理消息时出现了错误 😅')
-      }
+        const errorText = '⚠️ 处理消息时出现了一些错误。我也不知道为什么…'
+        if (theMsg) {
+          await ctx.api.editMessageText(
+            theMsg.chat.id,
+            theMsg.message_id,
+            replyTextList.length ? `${replyTextList.join('')}\n\n${errorText}` : errorText,
+          )
+        }
+        else {
+          await ctx.reply(`${errorText}`)
+        }
+      })
     })
 
     return { bot }
