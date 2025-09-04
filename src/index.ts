@@ -119,7 +119,17 @@ const app = new Elysia()
       log(`[MSG] ${userName} (${userId}) in ${ctx.chat.type}:`, finalText)
 
       invoke(async () => {
-        theMsg = await ctx.reply(`🔵 Connecting...`)
+        // 如果是群聊中的 @ 或回复，则回复原消息
+        const shouldReplyToMessage = ctx.message?.text?.includes('@') || ctx.msg?.reply_to_message
+
+        if (shouldReplyToMessage && ctx.message?.message_id) {
+          theMsg = await ctx.reply(`🔵 Connecting...`, {
+            reply_parameters: { message_id: ctx.message.message_id },
+          })
+        }
+        else {
+          theMsg = await ctx.reply(`🔵 Connecting...`)
+        }
 
         option.addUserMessage(finalText)
         const chatHistory = option.session.toMessages()
