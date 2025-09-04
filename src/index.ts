@@ -57,7 +57,7 @@ const app = new Elysia()
     })
 
     // 处理回复消息
-    bot.on('message').filter(ctx => !!(ctx.chat.type !== 'private' && ctx.msg.reply_to_message && ctx.msg.text), (ctx) => {
+    bot.on('message').filter(ctx => !!(ctx.chat.type !== 'private' && ctx.msg.reply_to_message && ctx.msg.reply_to_message.from?.username === ctx.me.username && ctx.msg.text), (ctx) => {
       const session = getGroupChatSession(ctx.chat.id)
       handleTextMessage(ctx, {
         addUserMessage: content => session.addUserMessage(content, { userId: ctx.from?.id || 0, userName: ctx.from?.first_name || 'User' }),
