@@ -13,6 +13,7 @@
     "@yolk-oss/elysia-env": "^3.0.0",
     "elysia": "latest",
     "grammy": "^1.38.2",
+    "marked": "^16.2.1",
     "xsai": "^0.4.0-beta.3"
   },
   "devDependencies": {
