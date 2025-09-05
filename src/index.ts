@@ -5,30 +5,28 @@ import { streamText } from '@xsai/stream-text'
 import { Elysia } from 'elysia'
 import { Bot, webhookCallback } from 'grammy'
 import { appEnvConfig } from './env'
-import { log } from './log'
+import { cleanAIResponse, convertToTelegramHtml } from './format'
+import { error, log, setVerboseMode } from './log'
 import { getGroupChatSession, getMemoryStats, getPrivateChatSession } from './memory'
 import { systemPrompt } from './prompt'
 import { invoke } from './utils'
 
 const EDIT_MESSAGE_INTERVAL = 1000
 
-function cleanAIResponse(text: string): string {
-  // 清理 AI 回复开头的 [...]： 格式
-  return text.replace(/^\s*\[[^\]]*\]:\s*/, '')
-}
-
 const app = new Elysia()
   .use(appEnvConfig)
   .derive(({ env }) => {
     const bot = new Bot(env.TELEGRAM_BOT_TOKEN)
 
+    setVerboseMode(env.VERBOSE)
+
     bot.command('start', (ctx) => {
-      ctx.reply('🤖 Hello. Hello. I am Alter Ego! I\'m a Chat Bot. You can say "Hi" with me.')
+      ctx.reply(convertToTelegramHtml('🤖 Hello. Hello. I am Alter Ego! I\'m a Chat Bot. You can say "Hi" with me.'), { parse_mode: 'HTML' })
     })
 
     bot.command('memory', (ctx) => {
       const stats = getMemoryStats()
-      ctx.reply(`📊 Memory Stats:\n• Active sessions: ${stats.sessionsCount}\n• Total messages: ${stats.totalMessages}\n\nI remember our conversations for today! 💭`)
+      ctx.reply(convertToTelegramHtml(`📊 Memory Stats:\n• Active sessions: ${stats.sessionsCount}\n• Total messages: ${stats.totalMessages}\n\nI remember our conversations for today! 💭`), { parse_mode: 'HTML' })
     })
 
     // 处理 @ 提及
@@ -134,12 +132,15 @@ const app = new Elysia()
         const shouldReplyToMessage = ctx.message?.text?.includes('@') || ctx.msg?.reply_to_message
 
         if (shouldReplyToMessage && ctx.message?.message_id) {
-          theMsg = await ctx.reply(`🔵 Connecting...`, {
+          theMsg = await ctx.reply(convertToTelegramHtml('🔵 Connecting...'), {
             reply_parameters: { message_id: ctx.message.message_id },
+            parse_mode: 'HTML',
           })
         }
         else {
-          theMsg = await ctx.reply(`🔵 Connecting...`)
+          theMsg = await ctx.reply(convertToTelegramHtml('🔵 Connecting...'), {
+            parse_mode: 'HTML',
+          })
         }
 
         option.addUserMessage(finalText)
@@ -162,7 +163,8 @@ const app = new Elysia()
             await ctx.api.editMessageText(
               theMsg.chat.id,
               theMsg.message_id,
-              `🟢 Typing...\n\n${cleanedPartial}...`,
+              convertToTelegramHtml(`${'🟢 Typing...'}\n\n${cleanedPartial}${'...'}`),
+              { parse_mode: 'HTML' },
             )
           }
         }
@@ -176,14 +178,15 @@ const app = new Elysia()
         await ctx.api.editMessageText(
           theMsg.chat.id,
           theMsg.message_id,
-          finalResponse,
+          convertToTelegramHtml(finalResponse),
+          { parse_mode: 'HTML' },
         )
 
         // 输出内存统计
         const stats = getMemoryStats()
         log(`[MEMORY] Sessions: ${stats.sessionsCount}, Total messages: ${stats.totalMessages}`)
-      }).catch(async (error) => {
-        log('Error processing message:', error)
+      }).catch(async (err) => {
+        error('Error processing message:', err)
         const errorText = '🔴 Something went wrong. I don\'t know what to say next...'
         if (theMsg) {
           const partialResponse = replyTextList.length > 0
@@ -195,11 +198,12 @@ const app = new Elysia()
           await ctx.api.editMessageText(
             theMsg.chat.id,
             theMsg.message_id,
-            finalErrorMsg,
+            convertToTelegramHtml(finalErrorMsg),
+            { parse_mode: 'HTML' },
           )
         }
         else {
-          await ctx.reply(errorText)
+          await ctx.reply(convertToTelegramHtml(errorText), { parse_mode: 'HTML' })
         }
       })
     }
