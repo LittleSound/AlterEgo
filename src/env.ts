@@ -2,6 +2,12 @@ import { env } from '@yolk-oss/elysia-env'
 import { t } from 'elysia'
 
 export const appEnvConfig = env({
+  // CLI Options
+  VERBOSE: t.Boolean({
+    default: false,
+    description: 'Enable verbose logging',
+  }),
+
   TELEGRAM_BOT_TOKEN: t.String({
     error: 'A valid Telegram bot token is required!',
   }),

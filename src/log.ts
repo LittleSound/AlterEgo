@@ -1,6 +1,12 @@
+let isVerbose = true
+
+export function setVerboseMode(verbose: boolean) {
+  isVerbose = verbose
+}
+
 export function log(...messages: any[]) {
   // eslint-disable-next-line no-console
-  console.log(`[LOG]:`, ...messages)
+  isVerbose && console.log(`[LOG]:`, ...messages)
 }
 export function warn(...messages: any[]) {
   console.warn(`[WARN]:`, ...messages)
