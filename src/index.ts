@@ -5,7 +5,7 @@ import { streamText } from '@xsai/stream-text'
 import { Elysia } from 'elysia'
 import { Bot, webhookCallback } from 'grammy'
 import { appEnvConfig } from './env'
-import { cleanAIResponse, convertToTelegramHtml } from './format'
+import { cleanAIResponse, convertToTelegramHtml, formatRequestMessage } from './format'
 import { error, getVerboseMode, log, setVerboseMode } from './log'
 import { getGroupChatSession, getMemoryStats, getPrivateChatSession } from './memory'
 import { systemPrompt } from './prompt'
@@ -50,9 +50,7 @@ const app = new Elysia()
     })
 
     // 不是 @ 自己的消息，那就默默记录下来吧
-    bot.on('message:entities', (ctx) => {
-      silentlyRecordMessage(ctx)
-    })
+    bot.on('message:entities', ctx => silentlyRecordMessage(ctx))
 
     // 处理回复消息
     bot.on('message').filter(ctx => !!(ctx.chat.type !== 'private' && ctx.msg.reply_to_message && ctx.msg.reply_to_message.from?.username === ctx.me.username && ctx.msg.text), (ctx) => {
@@ -78,20 +76,18 @@ const app = new Elysia()
     })
 
     // 群聊中的普通消息 - 仅记录，不回复（需要机器人是管理员）
-    // 提及和回复消息由上面的处理器处理并记录，所以这里需要跳过记录
-    bot.on('message:text').filter(ctx =>
-      (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup')
-      && !ctx.message.text?.includes('@') // 不包含@提及
-      && !ctx.msg.reply_to_message, // 不是回复消息
-    (ctx) => {
-      silentlyRecordMessage(ctx)
-    })
+    // 提及和回复此 Bot 的消息由上面的处理器处理并记录，所以这里不会包括
+    bot.on('message:text').filter((ctx) => {
+      return (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup')
+    }, ctx => silentlyRecordMessage(ctx))
 
+    // AI 会默默记录下群聊中的消息，直到有人 @ 它 或 回复它 才会进行回答
+    // 这样可以让 AI 了解群聊的上下文，但不会打扰到大家
     function silentlyRecordMessage(ctx: Context) {
       if (!ctx.message?.text)
         return
 
-      const messageText = ctx.message.text
+      const requestMsgText = formatRequestMessage(ctx)
       const userName = ctx.from?.first_name || 'User'
       const userId = ctx.from?.id || 0
       const chatId = ctx.chat?.id
@@ -100,11 +96,14 @@ const app = new Elysia()
         return
 
       const session = getGroupChatSession(chatId)
-      session.addUserMessage(messageText, { userId, userName })
+      session.addUserMessage(requestMsgText, { userId, userName })
 
-      log(`[SILENT] ${userName} (${userId}) in ${ctx.chat?.title || 'group'}:`, messageText)
+      log(`[SILENT] ${userName} (${userId}) in ${ctx.chat?.title || 'group'}:`, requestMsgText)
     }
 
+    // 当 AI 收到用户的消息时，比如直接私聊，或者是在群里 @ 它，或者回复它
+    // 它会通过这个函数给出答复，并且把对话记录存储到内存中
+    // LLM 生成的消息会一点一点地发送给用户，就像流式传输一样
     function handleTextMessage(ctx: Context, option: {
       addUserMessage: (content: string) => void
       addAssistantMessage: (content: string) => void
@@ -116,16 +115,12 @@ const app = new Elysia()
       let theMsg: Message.TextMessage
       let lastTime = Date.now()
 
-      const messageText = ctx.message.text
+      const requestMsgText = formatRequestMessage(ctx)
       const userName = ctx.from?.first_name || 'User'
       const userId = ctx.from?.id || 0
       const replyTextList: string[] = []
 
-      // 清理群聊中的 @ 提及
-      const cleanText = messageText.replace(/@\w+\s*/, '').trim()
-      const finalText = cleanText || messageText
-
-      log(`[MSG] ${userName} (${userId}) in ${ctx.chat.type}:`, finalText)
+      log(`[MSG] ${userName} (${userId}) in ${ctx.chat.type}:`, requestMsgText)
 
       // 回复的消息，修改这个值会直接发送或修改这条消息
       const replyMessage = invoke(() => {
@@ -170,7 +165,7 @@ const app = new Elysia()
       invoke(async () => {
         replyMessage.value = '🔵 Connecting...'
 
-        option.addUserMessage(finalText)
+        option.addUserMessage(requestMsgText)
         const chatHistory = option.session.toMessages()
         const messages = systemPrompt({ userName, chatType: ctx.chat?.type }).concat(chatHistory)
 

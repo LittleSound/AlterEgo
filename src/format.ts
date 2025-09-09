@@ -1,3 +1,4 @@
+import type { Context } from 'grammy'
 import { marked } from 'marked'
 
 export function cleanAIResponse(text: string): string {
@@ -55,4 +56,24 @@ export function convertToTelegramHtml(text: string): string {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
   }
+}
+
+export function formatRequestMessage(ctx: Context): string {
+  if (!ctx.message?.text)
+    return ''
+
+  const requestMessageText = ctx.message.text
+  const replyToMessageText = ctx.msg?.reply_to_message?.text || ''
+
+  const textlines: string[] = []
+  const push = (line: string) => textlines.push(line)
+
+  if (replyToMessageText) {
+    push(`Replying to:`)
+    push(`> "${replyToMessageText.replace(/\n/g, ' ').trim().slice(0, 300)}"`)
+    push('')
+  }
+
+  push(requestMessageText.trim())
+  return textlines.join('\n')
 }
