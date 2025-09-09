@@ -23,15 +23,10 @@ bun install
 
 ## 🔧 配置
 
-1. 创建 `.env.local` 文件：
-```bash
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_BASE_URL=https://api.openai.com/v1/
-```
+1. 创建 `.env.local` 文件，具体支持的环境变量请参考 `./src/env.ts`
 
 2. 从 [@BotFather](https://t.me/BotFather) 获取 bot token
-3. 从 [OpenAI](https://platform.openai.com/api-keys) 获取 API key
+3. 从 [OpenRouter](https://openrouter.com) 获取 API key
 
 ## 🏃‍♂️ 运行
 
@@ -51,7 +46,6 @@ bun run lint:fix
 - `/start` - 欢迎消息
 - 文本消息回复 - 使用 AI 智能回复用户消息
 - 流式响应 - 实时显示 AI 生成的文本
-- 错误处理 - 处理非文本消息
 
 ## 🧠 AI 集成
 
