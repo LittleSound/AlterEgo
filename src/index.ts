@@ -6,7 +6,7 @@ import { Elysia } from 'elysia'
 import { Bot, webhookCallback } from 'grammy'
 import { appEnvConfig } from './env'
 import { cleanAIResponse, convertToTelegramHtml } from './format'
-import { error, log, setVerboseMode } from './log'
+import { error, getVerboseMode, log, setVerboseMode } from './log'
 import { getGroupChatSession, getMemoryStats, getPrivateChatSession } from './memory'
 import { systemPrompt } from './prompt'
 import { invoke } from './utils'
@@ -127,21 +127,48 @@ const app = new Elysia()
 
       log(`[MSG] ${userName} (${userId}) in ${ctx.chat.type}:`, finalText)
 
-      invoke(async () => {
-        // 如果是群聊中的 @ 或回复，则回复原消息
-        const shouldReplyToMessage = ctx.message?.text?.includes('@') || ctx.msg?.reply_to_message
+      // 回复的消息，修改这个值会直接发送或修改这条消息
+      const replyMessage = invoke(() => {
+        let value = ''
+        return {
+          get value() {
+            return value
+          },
+          set value(text: string) {
+            const oldValue = value
+            value = convertToTelegramHtml(text)
+            if (theMsg)
+              editMessage(value, oldValue)
+            else
+              newMessage(value)
+          },
+        }
 
-        if (shouldReplyToMessage && ctx.message?.message_id) {
-          theMsg = await ctx.reply(convertToTelegramHtml('🔵 Connecting...'), {
-            reply_parameters: { message_id: ctx.message.message_id },
+        async function newMessage(newValue: string) {
+          // 如果是 @ 或回复，则回复原消息
+          const shouldReplyToMessage = ctx.message?.text?.includes('@') || ctx.msg?.reply_to_message
+          theMsg = await ctx.reply(newValue, {
+            reply_parameters: shouldReplyToMessage && ctx.message?.message_id
+              ? { message_id: ctx.message.message_id }
+              : undefined,
             parse_mode: 'HTML',
           })
         }
-        else {
-          theMsg = await ctx.reply(convertToTelegramHtml('🔵 Connecting...'), {
-            parse_mode: 'HTML',
-          })
+
+        async function editMessage(newValue: string, oldValue: string) {
+          if (newValue === oldValue)
+            return
+          await ctx.api.editMessageText(
+            theMsg.chat.id,
+            theMsg.message_id,
+            newValue,
+            { parse_mode: 'HTML' },
+          )
         }
+      })
+
+      invoke(async () => {
+        replyMessage.value = '🔵 Connecting...'
 
         option.addUserMessage(finalText)
         const chatHistory = option.session.toMessages()
@@ -160,31 +187,14 @@ const app = new Elysia()
           if (Date.now() - lastTime > EDIT_MESSAGE_INTERVAL) {
             lastTime = Date.now()
             const cleanedPartial = cleanAIResponse(replyTextList.join(''))
-            await ctx.api.editMessageText(
-              theMsg.chat.id,
-              theMsg.message_id,
-              convertToTelegramHtml(`${'🟢 Typing...'}\n\n${cleanedPartial}${'...'}`),
-              { parse_mode: 'HTML' },
-            )
+            replyMessage.value = `${'🟢 Typing...'}\n\n${cleanedPartial}${'...'}`
           }
         }
 
         const finalResponse = cleanAIResponse(replyTextList.join(''))
-
         log(`[REPLY] Alter Ego:`, finalResponse)
-
         option.addAssistantMessage(finalResponse)
-
-        await ctx.api.editMessageText(
-          theMsg.chat.id,
-          theMsg.message_id,
-          convertToTelegramHtml(finalResponse),
-          { parse_mode: 'HTML' },
-        )
-
-        // 输出内存统计
-        const stats = getMemoryStats()
-        log(`[MEMORY] Sessions: ${stats.sessionsCount}, Total messages: ${stats.totalMessages}`)
+        replyMessage.value = finalResponse
       }).catch(async (err) => {
         error('Error processing message:', err)
         const errorText = '🔴 Something went wrong. I don\'t know what to say next...'
@@ -195,15 +205,32 @@ const app = new Elysia()
           const finalErrorMsg = partialResponse
             ? `${partialResponse}\n\n${errorText}`
             : errorText
-          await ctx.api.editMessageText(
-            theMsg.chat.id,
-            theMsg.message_id,
-            convertToTelegramHtml(finalErrorMsg),
-            { parse_mode: 'HTML' },
+
+          // 让 AI 知道自己出错了。用户问的时候，AI 可以回答为什么出错了。
+          option.addAssistantMessage(err instanceof Error
+            ? `${finalErrorMsg}\n\nAlter Ego System Error Log: ${err.toString()}`
+            : finalErrorMsg,
           )
+          replyMessage.value = finalErrorMsg
         }
         else {
-          await ctx.reply(convertToTelegramHtml(errorText), { parse_mode: 'HTML' })
+          // 让 AI 知道自己出错了。用户问的时候，AI 可以回答为什么出错了。
+          option.addAssistantMessage(err instanceof Error
+            ? `${errorText}\n\nAlter Ego System Error Log: ${err.toString()}`
+            : errorText,
+          )
+          replyMessage.value = errorText
+        }
+      }).finally(() => {
+        // 输出内存统计
+        if (!getVerboseMode())
+          return
+        try {
+          const stats = getMemoryStats()
+          log(`[MEMORY] Sessions: ${stats.sessionsCount}, Total messages: ${stats.totalMessages}`)
+        }
+        catch (err) {
+          error('Unexpected error when processing message:', err)
         }
       })
     }

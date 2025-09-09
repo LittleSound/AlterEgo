@@ -3,6 +3,9 @@ let isVerbose = true
 export function setVerboseMode(verbose: boolean) {
   isVerbose = verbose
 }
+export function getVerboseMode() {
+  return isVerbose
+}
 
 export function log(...messages: any[]) {
   // eslint-disable-next-line no-console
