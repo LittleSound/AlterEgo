@@ -14,8 +14,12 @@ export const appEnvConfig = env({
 
   // Models
   AI_LLM_DEFAULT_MODEL: t.String({
-    default: 'openai/gpt-5-chat',
+    default: 'openai/gpt-5',
     error: 'A valid LLM model is required!',
+  }),
+  AI_LLM_MAX_STEPS: t.Number({
+    default: 10,
+    description: 'Maximum reasoning steps for the AI',
   }),
 
   // Open Router

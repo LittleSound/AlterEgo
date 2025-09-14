@@ -6,16 +6,21 @@ import { Elysia } from 'elysia'
 import { Bot, webhookCallback } from 'grammy'
 import { appEnvConfig } from './env'
 import { cleanAIResponse, convertToTelegramHtml, formatRequestMessage } from './format'
-import { error, getVerboseMode, log, setVerboseMode } from './log'
+import { defineLogStreamed, error, getVerboseMode, log, setVerboseMode } from './log'
 import { getGroupChatSession, getMemoryStats, getPrivateChatSession } from './memory'
 import { systemPrompt } from './prompt'
+import { setupTools } from './tool'
 import { invoke } from './utils'
 
 const EDIT_MESSAGE_INTERVAL = 1000
 
 const app = new Elysia()
   .use(appEnvConfig)
-  .derive(({ env }) => {
+  .derive(async () => {
+    const aiTools = await setupTools()
+    return { aiTools }
+  })
+  .derive(({ env, aiTools }) => {
     const bot = new Bot(env.TELEGRAM_BOT_TOKEN)
 
     setVerboseMode(env.VERBOSE)
@@ -114,11 +119,14 @@ const app = new Elysia()
 
       let theMsg: Message.TextMessage
       let lastTime = Date.now()
+      // 是否有 function calling
+      let isWithWorking = false
 
       const requestMsgText = formatRequestMessage(ctx)
       const userName = ctx.from?.first_name || 'User'
       const userId = ctx.from?.id || 0
       const replyTextList: string[] = []
+      const toolCalls: { toolName: string, args: string }[] = []
 
       log(`[MSG] ${userName} (${userId}) in ${ctx.chat.type}:`, requestMsgText)
 
@@ -130,6 +138,8 @@ const app = new Elysia()
             return value
           },
           set value(text: string) {
+            if (!text || text.trim() === '')
+              return
             const oldValue = value
             value = convertToTelegramHtml(text)
             if (theMsg)
@@ -162,6 +172,10 @@ const app = new Elysia()
         }
       })
 
+      function getToolsLog() {
+        return toolCalls.filter(Boolean).map(t => `- ⚙️ [${t.toolName}]: ${t.args.replaceAll('\n', ' ')}`).join('\n')
+      }
+
       invoke(async () => {
         replyMessage.value = '🔵 Connecting...'
 
@@ -174,22 +188,42 @@ const app = new Elysia()
           baseURL: env.AI_OPENROUTER_BASE_URL,
           messages,
           model: env.AI_LLM_DEFAULT_MODEL,
+          maxSteps: env.AI_LLM_MAX_STEPS,
+          tools: aiTools,
+          onEvent(event) {
+            if (!isWithWorking && event.type === 'tool-call-delta') {
+              isWithWorking = true
+            }
+            if (event.type !== 'tool-call') {
+              return
+            }
+
+            log(`[TOOL] Calling tool: ${event.toolName} with args: ${event.args}`)
+            toolCalls.push({ toolName: event.toolName, args: event.args })
+
+            replyMessage.value = `🟠 Working...\n${getToolsLog()}`
+          },
         })
 
+        const writeLog = defineLogStreamed('[REPLY] Alter Ego: ')
         for await (const textPart of textStream) {
           replyTextList.push(textPart)
+          writeLog(textPart)
 
           if (Date.now() - lastTime > EDIT_MESSAGE_INTERVAL) {
             lastTime = Date.now()
             const cleanedPartial = cleanAIResponse(replyTextList.join(''))
-            replyMessage.value = `${'🟢 Typing...'}\n\n${cleanedPartial}${'...'}`
+            replyMessage.value = `${isWithWorking ? `\n🟠 Working...\n${getToolsLog()}` : '🟢 Typing...'}\n\n${cleanedPartial}${'...'}`
           }
         }
+        writeLog('\n')
 
         const finalResponse = cleanAIResponse(replyTextList.join(''))
-        log(`[REPLY] Alter Ego:`, finalResponse)
+        // log(`[REPLY] Alter Ego:`, finalResponse)
         option.addAssistantMessage(finalResponse)
-        replyMessage.value = finalResponse
+        replyMessage.value = isWithWorking
+          ? `☑️ Done working\n${finalResponse}`
+          : finalResponse
       }).catch(async (err) => {
         error('Error processing message:', err)
         const errorText = '🔴 Something went wrong. I don\'t know what to say next...'
