@@ -4,6 +4,7 @@
   "module": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "bun run src/index.ts",
     "dev": "bun run --watch src/index.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
