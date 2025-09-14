@@ -1,5 +1,4 @@
 import { defineConfig } from 'drizzle-kit'
-import 'dotenv/config'
 
 console.log('Drizzle config env:', process.env)
 
