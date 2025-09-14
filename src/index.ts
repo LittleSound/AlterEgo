@@ -58,9 +58,6 @@ const app = new Elysia()
       })
     })
 
-    // 不是 @ 自己的消息，那就默默记录下来吧
-    bot.on('message:entities', ctx => silentlyRecordMessage(ctx))
-
     // 处理回复消息
     bot.on('message').filter(ctx => !!(ctx.chat.type !== 'private' && ctx.msg.reply_to_message && ctx.msg.reply_to_message.from?.username === ctx.me.username && ctx.msg.text), (ctx) => {
       const session = getGroupChatSession(ctx.chat.id)
@@ -89,6 +86,9 @@ const app = new Elysia()
     bot.on('message:text').filter((ctx) => {
       return (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup')
     }, ctx => silentlyRecordMessage(ctx))
+
+    // 不是 @ 自己的消息，那就默默记录下来吧
+    bot.on('message:entities', ctx => silentlyRecordMessage(ctx))
 
     // AI 会默默记录下群聊中的消息，直到有人 @ 它 或 回复它 才会进行回答
     // 这样可以让 AI 了解群聊的上下文，但不会打扰到大家
