@@ -4,6 +4,7 @@ export default antfu({
   typescript: true,
   ignores: [
     'docs',
+    'drizzle',
   ],
   stylistic: {
     indent: 2,
