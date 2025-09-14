@@ -3,7 +3,7 @@ import { marked } from 'marked'
 
 export function cleanAIResponse(text: string): string {
   // 清理 AI 回复开头的 [...]： 格式
-  return text.replace(/^\s*\[[^\]]*\]:\s*/, '')
+  return text.replace(/^\s*\[[^\]]*\]:\s*/, '').trim()
 }
 
 export function convertToTelegramHtml(text: string): string {

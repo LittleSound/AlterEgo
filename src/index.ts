@@ -188,7 +188,10 @@ const app = new Elysia()
       })
 
       function getToolsLog() {
-        return toolCalls.filter(Boolean).map(t => `> ⚙️ ${t.toolName} \`${t.args.replaceAll('\n', ' ').replaceAll('`', '')}\``).join('\n')
+        return toolCalls.filter(Boolean).map((t) => {
+          const args = t.args.length > 32 ? `${t.args.slice(0, 32)}...` : t.args
+          return `⚙️ ${t.toolName} \`${args.replaceAll('\n', ' ').replaceAll('`', '')}\``
+        }).join('\n')
       }
 
       invoke(async () => {
