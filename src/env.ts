@@ -36,4 +36,11 @@ export const appEnvConfig = env({
     default: 10,
     description: 'Maximum number of memory entries to store per user',
   }),
+
+  // Database
+  POSTGRESQL_DATABASE_URL: t.String({
+    default: '',
+    description: 'PostgreSQL connection string',
+    error: 'A valid PostgreSQL Database URL is required!',
+  }),
 })

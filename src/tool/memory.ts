@@ -1,18 +1,55 @@
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type { Message } from 'xsai'
 import * as v from 'valibot'
 import { tool } from 'xsai'
+import { memoryTable } from '../database/memory'
+import { error } from '../log'
+import { invoke } from '../utils'
 
-const memoryStorage = new Map<number, string[]>()
+interface MemoryItem {
+  text: string
+}
 
 let maxMemoryCount = 10
+let database: NodePgDatabase | null = null
+let isMemorySynchronized = false
+
+const memoryStorage = new Map<number, MemoryItem[]>()
+
 export function setMaxMemoryCount(count: number) {
   maxMemoryCount = count
+}
+
+export function setMemoryDatabase(_db: NodePgDatabase | null) {
+  database = _db
+
+  invoke(async () => {
+    if (!database)
+      return
+
+    const memoryList = await database.select().from(memoryTable)
+
+    for (const memory of memoryList) {
+      if (!Array.isArray(memory.content)) {
+        error(`Memory content for user ${memory.userId} is not an array, skipping...`)
+        return
+      }
+      const existingMemory = memoryStorage.get(memory.userId) || []
+      existingMemory.push(...memory.content)
+      memoryStorage.set(memory.userId, existingMemory)
+    }
+    isMemorySynchronized = true
+  })
+}
+
+export function getMemorySyncStatus() {
+  return isMemorySynchronized
 }
 
 export async function remember(option: { userId: number }) {
   return await tool({
     name: 'remember',
-    description: 'store a piece of information into long-term memory',
+    description: 'Add a note about this user that you don\'t want to forget into long-term memory. NOTE: Do not write existing memories again.',
     parameters: v.object({
       // place: v.pipe(
       //   v.picklist(['user-private', 'chat-group', 'global'] as const),
@@ -20,33 +57,59 @@ export async function remember(option: { userId: number }) {
       // ),
       text: v.pipe(
         v.string(),
-        v.description('the information to be remembered'),
+        v.description('the information to be remembered, write it concisely and clearly.'),
       ),
     }),
     execute: async ({ text }) => {
-      const memories = memoryStorage.get(option.userId) || []
-      memories.push(text)
-      if (memories.length > maxMemoryCount) {
-        memories.shift()
-      }
-      memoryStorage.set(option.userId, memories)
-      return `Got it! I've remembered.`
+      addMemoryByUserId(option.userId, { text })
+      let message = `💾 Got it! I've remembered.`
+      if (!database)
+        message += '\nWARN: The system is not connected to the database, so memory notes is only kept in RAM.'
+      return message
     },
   })
 }
 
-export function getMemories(userId: number): string[] {
+export function getMemories(userId: number): MemoryItem[] {
   return memoryStorage.get(userId) || []
 }
 
-export function getFormatedMemoriesMessage(userId: number): Message | null {
+export function addMemoryByUserId(userId: number, memoryItem: MemoryItem) {
+  const memories = memoryStorage.get(userId) || []
+  memories.push(memoryItem)
+  if (memories.length > maxMemoryCount) {
+    memories.shift()
+  }
+  memoryStorage.set(userId, memories)
+
+  invoke(async () => {
+    if (!database)
+      return
+
+    const now = Date.now()
+    await database.insert(memoryTable).values({
+      userId,
+      content: memories,
+      createdAt: now,
+      updatedAt: now,
+    }).onConflictDoUpdate({
+      target: memoryTable.userId,
+      set: {
+        content: memories,
+        updatedAt: now,
+      },
+    })
+  })
+}
+
+export function getFormatedMemoriesMessage(userId: number, userName: string): Message | null {
   const memories = getMemories(userId)
   if (memories.length === 0)
     return null
 
-  const memoriesText = memories.map((m, i) => `${i + 1}. ${m}`).join('\n\n')
+  const memoriesText = memories.map((m, i) => `${i + 1}. ${m.text}`).join('\n\n')
   return {
     role: 'user',
-    content: `Memory:\n\n${memoriesText}`,
+    content: `Existing long-term memory of ${userName}:\n\n${memoriesText}`,
   }
 }

@@ -4,19 +4,35 @@ import type { GroupChatSessionMemory, PrivateChatSessionMemory } from './memory'
 import { streamText } from '@xsai/stream-text'
 import { Elysia } from 'elysia'
 import { Bot, webhookCallback } from 'grammy'
+import { setupDatabase } from './database'
 import { appEnvConfig } from './env'
 import { cleanAIResponse, convertToTelegramHtml, formatRequestMessage } from './format'
 import { defineLogStreamed, error, getVerboseMode, log, setVerboseMode } from './log'
 import { getGroupChatSession, getPrivateChatSession, getMemoryStats as getSessionMemoryStats } from './memory'
 import { systemPrompt } from './prompt'
 import { setupTools } from './tool'
-import { getFormatedMemoriesMessage, getMemories, remember, setMaxMemoryCount } from './tool/memory'
+import { getFormatedMemoriesMessage, getMemories, getMemorySyncStatus, remember, setMaxMemoryCount, setMemoryDatabase } from './tool/memory'
 import { invoke } from './utils'
 
 const EDIT_MESSAGE_INTERVAL = 1000
 
 const app = new Elysia()
   .use(appEnvConfig)
+  // setup database
+  .derive(({ env }) => {
+    if (!env.POSTGRESQL_DATABASE_URL) {
+      return { database: null }
+    }
+    const { database } = setupDatabase({ databaseUrl: env.POSTGRESQL_DATABASE_URL })
+    return { database }
+  })
+  // setup app status
+  .derive(({ env, database }) => {
+    setVerboseMode(env.VERBOSE)
+    setMaxMemoryCount(env.AI_MEMORY_MAX_COUNT)
+    setMemoryDatabase(database)
+  })
+  // setup AI tools
   .derive(async () => {
     const aiTools = await setupTools()
     return { aiTools }
@@ -24,18 +40,13 @@ const app = new Elysia()
   .derive(({ env, aiTools }) => {
     const bot = new Bot(env.TELEGRAM_BOT_TOKEN)
 
-    // --- setup env start ---
-    setVerboseMode(env.VERBOSE)
-    setMaxMemoryCount(env.AI_MEMORY_MAX_COUNT)
-    // --- setup env end ---
-
     bot.command('start', (ctx) => {
-      ctx.reply(convertToTelegramHtml('🤖 Hello. Hello. I am Alter Ego! I\'m a Chat Bot. You can say "Hi" with me.'), { parse_mode: 'HTML' })
+      ctx.reply(convertToTelegramHtml('🤖 Hello. Hello. I am Alter Ego! I\'m a Chat Bot. You can say "Hi" with me.'))
     })
 
     bot.command('session', (ctx) => {
       const stats = getSessionMemoryStats()
-      ctx.reply(convertToTelegramHtml(`📊 Memory Stats:\n• Active sessions: ${stats.sessionsCount}\n• Total messages: ${stats.totalMessages}\n\nI remember our conversations for today! 💭`), { parse_mode: 'HTML' })
+      ctx.reply(convertToTelegramHtml(`📊 Memory Stats:\n• Active sessions: ${stats.sessionsCount}\n• Total messages: ${stats.totalMessages}\n\nI remember our conversations for today! 💭`))
     })
 
     bot.command('memory', (ctx) => {
@@ -44,8 +55,22 @@ const app = new Elysia()
         return
       }
       const memories = getMemories(ctx.from?.id || 0)
-      const str = memories.map((m, i) => `${i + 1}. ${m}`).join('\n\n')
-      ctx.reply(`🧠 Your Memories (${memories.length}):\n\n${str || 'No memories yet.'}`)
+      let replyText = `💾 Your Memories (${memories.length}):`
+
+      const isSynced = getMemorySyncStatus()
+      replyText += isSynced ? '' : ' *(Non-synchronized state)*'
+
+      replyText += `\n\n`
+      if (memories.length) {
+        const memoriesListString = memories.map((m, i) => {
+          return `> **📝 Note ${i + 1}**\n> ${m.text.replaceAll('\n', '\n> ')}`
+        }).join('\n\n')
+        replyText += memoriesListString
+      }
+      else {
+        replyText += 'No memories yet.'
+      }
+      ctx.reply(convertToTelegramHtml(replyText), { parse_mode: 'HTML' })
     })
 
     // 处理 @ 提及
@@ -200,7 +225,7 @@ const app = new Elysia()
         option.addUserMessage(requestMsgText)
         const chatHistory = option.session.toMessages()
         const messages = systemPrompt({ userName, chatType: ctx.chat?.type })
-        const memories = getFormatedMemoriesMessage(userId)
+        const memories = getFormatedMemoriesMessage(userId, userName)
         if (memories)
           messages.push(memories)
         messages.push(...chatHistory)
