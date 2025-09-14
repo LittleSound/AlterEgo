@@ -7,10 +7,10 @@ import { Bot, webhookCallback } from 'grammy'
 import { appEnvConfig } from './env'
 import { cleanAIResponse, convertToTelegramHtml, formatRequestMessage } from './format'
 import { defineLogStreamed, error, getVerboseMode, log, setVerboseMode } from './log'
-import { getGroupChatSession, getMemoryStats, getPrivateChatSession } from './memory'
+import { getGroupChatSession, getPrivateChatSession, getMemoryStats as getSessionMemoryStats } from './memory'
 import { systemPrompt } from './prompt'
 import { setupTools } from './tool'
-import { getFormatedMemoriesMessage, remember, setMaxMemoryCount } from './tool/memory'
+import { getFormatedMemoriesMessage, getMemories, remember, setMaxMemoryCount } from './tool/memory'
 import { invoke } from './utils'
 
 const EDIT_MESSAGE_INTERVAL = 1000
@@ -33,9 +33,19 @@ const app = new Elysia()
       ctx.reply(convertToTelegramHtml('🤖 Hello. Hello. I am Alter Ego! I\'m a Chat Bot. You can say "Hi" with me.'), { parse_mode: 'HTML' })
     })
 
-    bot.command('memory', (ctx) => {
-      const stats = getMemoryStats()
+    bot.command('session', (ctx) => {
+      const stats = getSessionMemoryStats()
       ctx.reply(convertToTelegramHtml(`📊 Memory Stats:\n• Active sessions: ${stats.sessionsCount}\n• Total messages: ${stats.totalMessages}\n\nI remember our conversations for today! 💭`), { parse_mode: 'HTML' })
+    })
+
+    bot.command('memory', (ctx) => {
+      if (!ctx.from?.id) {
+        ctx.reply('⚠️ Cannot get your user ID.')
+        return
+      }
+      const memories = getMemories(ctx.from?.id || 0)
+      const str = memories.map((m, i) => `${i + 1}. ${m}`).join('\n\n')
+      ctx.reply(`🧠 Your Memories (${memories.length}):\n\n${str || 'No memories yet.'}`)
     })
 
     // 处理 @ 提及
@@ -178,7 +188,7 @@ const app = new Elysia()
       })
 
       function getToolsLog() {
-        return toolCalls.filter(Boolean).map(t => `⚙️ ${t.toolName} ${t.args.replaceAll('\n', ' ')}`).join('\n')
+        return toolCalls.filter(Boolean).map(t => `> ⚙️ ${t.toolName} \`${t.args.replaceAll('\n', ' ').replaceAll('`', '')}\``).join('\n')
       }
 
       invoke(async () => {
@@ -270,7 +280,7 @@ const app = new Elysia()
         if (!getVerboseMode())
           return
         try {
-          const stats = getMemoryStats()
+          const stats = getSessionMemoryStats()
           log(`[MEMORY] Sessions: ${stats.sessionsCount}, Total messages: ${stats.totalMessages}`)
         }
         catch (err) {
