@@ -14,4 +14,5 @@ FROM base AS release
 COPY --from=install /temp/dev/node_modules node_modules
 COPY . .
 
-ENTRYPOINT [ "bash", "-c", "bun run drizzle:push && bun run start" ]
+ENTRYPOINT [ "bash" ]
+CMD [ "bash", "-c", "bun run drizzle:push && bun run start" ]

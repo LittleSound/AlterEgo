@@ -26,14 +26,13 @@
     "grammy": "^1.38.2",
     "marked": "^16.2.1",
     "nanoid": "^5.1.5",
-    "pg": "^8.16.3",
+    "postgres": "^3.4.7",
     "valibot": "^1.1.0",
     "xsai": "^0.4.0-beta.3"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^5.2.2",
     "@dotenvx/dotenvx": "^1.49.0",
-    "@types/pg": "^8.15.5",
     "bun-types": "latest",
     "drizzle-kit": "^0.31.4",
     "eslint": "^9.34.0"
