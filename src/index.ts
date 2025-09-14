@@ -10,6 +10,7 @@ import { defineLogStreamed, error, getVerboseMode, log, setVerboseMode } from '.
 import { getGroupChatSession, getMemoryStats, getPrivateChatSession } from './memory'
 import { systemPrompt } from './prompt'
 import { setupTools } from './tool'
+import { getFormatedMemoriesMessage, remember, setMaxMemoryCount } from './tool/memory'
 import { invoke } from './utils'
 
 const EDIT_MESSAGE_INTERVAL = 1000
@@ -23,7 +24,10 @@ const app = new Elysia()
   .derive(({ env, aiTools }) => {
     const bot = new Bot(env.TELEGRAM_BOT_TOKEN)
 
+    // --- setup env start ---
     setVerboseMode(env.VERBOSE)
+    setMaxMemoryCount(env.AI_MEMORY_MAX_COUNT)
+    // --- setup env end ---
 
     bot.command('start', (ctx) => {
       ctx.reply(convertToTelegramHtml('🤖 Hello. Hello. I am Alter Ego! I\'m a Chat Bot. You can say "Hi" with me.'), { parse_mode: 'HTML' })
@@ -182,7 +186,11 @@ const app = new Elysia()
 
         option.addUserMessage(requestMsgText)
         const chatHistory = option.session.toMessages()
-        const messages = systemPrompt({ userName, chatType: ctx.chat?.type }).concat(chatHistory)
+        const messages = systemPrompt({ userName, chatType: ctx.chat?.type })
+        const memories = getFormatedMemoriesMessage(userId)
+        if (memories)
+          messages.push(memories)
+        messages.push(...chatHistory)
 
         const { textStream } = streamText({
           apiKey: env.AI_OPENROUTER_API_KEY!,
@@ -190,7 +198,10 @@ const app = new Elysia()
           messages,
           model: env.AI_LLM_DEFAULT_MODEL,
           maxSteps: env.AI_LLM_MAX_STEPS,
-          tools: aiTools,
+          tools: [
+            ...aiTools,
+            await remember({ userId }),
+          ],
           onEvent(event) {
             if (!isWithWorking && event.type === 'tool-call-delta') {
               isWithWorking = true

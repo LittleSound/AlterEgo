@@ -30,4 +30,10 @@ export const appEnvConfig = env({
     default: 'https://openrouter.ai/api/v1',
     error: 'A valid AI Base URL is required!',
   }),
+
+  // AI Memory
+  AI_MEMORY_MAX_COUNT: t.Number({
+    default: 10,
+    description: 'Maximum number of memory entries to store per user',
+  }),
 })
