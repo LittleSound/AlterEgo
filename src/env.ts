@@ -43,4 +43,12 @@ export const appEnvConfig = env({
     description: 'PostgreSQL connection string',
     error: 'A valid PostgreSQL Database URL is required!',
   }),
+  POSTGRES_PASSWORD: t.String({
+    default: '',
+    description: 'PostgreSQL password',
+  }),
+  POSTGRES_PORT: t.Number({
+    default: 5432,
+    description: 'PostgreSQL port',
+  }),
 })

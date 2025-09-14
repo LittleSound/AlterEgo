@@ -5,3 +5,5 @@ export function setupDatabase(options: { databaseUrl: string }) {
 
   return { database }
 }
+
+export { memoryTable } from './memory'

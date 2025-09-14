@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      # POSTGRES_DB: database
+      # POSTGRES_USER: user
+      - POSTGRES_PASSWORD
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+    driver: local

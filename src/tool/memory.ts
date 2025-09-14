@@ -20,7 +20,11 @@ export function setMaxMemoryCount(count: number) {
   maxMemoryCount = count
 }
 
-export function setMemoryDatabase(_db: NodePgDatabase | null) {
+export function setupMemoryDatabase(_db: NodePgDatabase | null) {
+  if (database) {
+    error('Memory database is already set, cannot set again.')
+    return
+  }
   database = _db
 
   invoke(async () => {

@@ -6,6 +6,13 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "bun run src/index.ts",
     "dev": "bun run --watch src/index.ts",
+    "docker:up": "bun run with-env -- docker compose up -d",
+    "docker:down": "docker compose down",
+    "drizzle": "bun run with-env -- drizzle-kit",
+    "drizzle:push": "bun run drizzle push",
+    "drizzle:generate": "bun run drizzle generate",
+    "drizzle:migrate": "bun run drizzle migrate",
+    "with-env": "dotenvx run -f .env -f .env.local --overload --ignore=MISSING_ENV_FILE",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "bunx tsc --noEmit"
@@ -25,8 +32,10 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "^5.2.2",
+    "@dotenvx/dotenvx": "^1.49.0",
     "@types/pg": "^8.15.5",
     "bun-types": "latest",
+    "dotenv": "^17.2.2",
     "drizzle-kit": "^0.31.4",
     "eslint": "^9.34.0"
   },
