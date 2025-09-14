@@ -121,6 +121,7 @@ const app = new Elysia()
       let lastTime = Date.now()
       // 是否有 function calling
       let isWithWorking = false
+      let isThinking = false
 
       const requestMsgText = formatRequestMessage(ctx)
       const userName = ctx.from?.first_name || 'User'
@@ -194,6 +195,9 @@ const app = new Elysia()
             if (!isWithWorking && event.type === 'tool-call-delta') {
               isWithWorking = true
             }
+            if (!isThinking && event.type === 'text-delta' && event.text === '') {
+              isThinking = true
+            }
             if (event.type !== 'tool-call') {
               return
             }
@@ -213,7 +217,7 @@ const app = new Elysia()
           if (Date.now() - lastTime > EDIT_MESSAGE_INTERVAL) {
             lastTime = Date.now()
             const cleanedPartial = cleanAIResponse(replyTextList.join(''))
-            replyMessage.value = `${isWithWorking ? `\n🟠 Working...\n${getToolsLog()}` : '🟢 Typing...'}\n\n${cleanedPartial}${'...'}`
+            replyMessage.value = `${isWithWorking ? `\n🟠 Working...\n${getToolsLog()}` : (isThinking && !cleanedPartial.length) ? '🟢 Thinking...' : '🟢 Typing...'}\n\n${cleanedPartial}${'...'}`
           }
         }
         writeLog('\n')
