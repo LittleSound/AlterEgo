@@ -173,7 +173,7 @@ const app = new Elysia()
       })
 
       function getToolsLog() {
-        return toolCalls.filter(Boolean).map(t => `- ⚙️ [${t.toolName}]: ${t.args.replaceAll('\n', ' ')}`).join('\n')
+        return toolCalls.filter(Boolean).map(t => `⚙️ ${t.toolName} ${t.args.replaceAll('\n', ' ')}`).join('\n')
       }
 
       invoke(async () => {
