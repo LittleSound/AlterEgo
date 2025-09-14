@@ -1,3 +1,4 @@
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type { Context } from 'grammy'
 import type { Message } from 'grammy/types'
 import type { GroupChatSessionMemory, PrivateChatSessionMemory } from './memory'
@@ -11,10 +12,14 @@ import { defineLogStreamed, error, getVerboseMode, log, setVerboseMode } from '.
 import { getGroupChatSession, getPrivateChatSession, getMemoryStats as getSessionMemoryStats } from './memory'
 import { systemPrompt } from './prompt'
 import { setupTools } from './tool'
-import { getFormatedMemoriesMessage, getMemories, getMemorySyncStatus, remember, setMaxMemoryCount, setMemoryDatabase } from './tool/memory'
+import { getFormatedMemoriesMessage, getMemories, getMemorySyncStatus, remember, setMaxMemoryCount, setupMemoryDatabase } from './tool/memory'
 import { invoke } from './utils'
 
 const EDIT_MESSAGE_INTERVAL = 1000
+
+let theBot: Bot
+let theDatabase: NodePgDatabase | null = null
+let theAiTools: ReturnType<typeof setupTools> extends Promise<infer R> ? R : never
 
 const app = new Elysia()
   .use(appEnvConfig)
@@ -23,22 +28,32 @@ const app = new Elysia()
     if (!env.POSTGRESQL_DATABASE_URL) {
       return { database: null }
     }
+    if (theDatabase) {
+      return { database: theDatabase }
+    }
     const { database } = setupDatabase({ databaseUrl: env.POSTGRESQL_DATABASE_URL })
+    theDatabase = database
+    setupMemoryDatabase(database)
     return { database }
   })
   // setup app status
-  .derive(({ env, database }) => {
+  .derive(({ env }) => {
     setVerboseMode(env.VERBOSE)
     setMaxMemoryCount(env.AI_MEMORY_MAX_COUNT)
-    setMemoryDatabase(database)
   })
   // setup AI tools
   .derive(async () => {
-    const aiTools = await setupTools()
+    if (theAiTools) {
+      return { aiTools: theAiTools }
+    }
+    const aiTools = theAiTools = await setupTools()
     return { aiTools }
   })
   .derive(({ env, aiTools }) => {
-    const bot = new Bot(env.TELEGRAM_BOT_TOKEN)
+    if (theBot) {
+      return { bot: theBot }
+    }
+    const bot = theBot = new Bot(env.TELEGRAM_BOT_TOKEN)
 
     bot.command('start', (ctx) => {
       ctx.reply(convertToTelegramHtml('🤖 Hello. Hello. I am Alter Ego! I\'m a Chat Bot. You can say "Hi" with me.'))
