@@ -1,0 +1,16 @@
+diff --git a/node_modules/@xsai/stream-text/.bun-tag-c27543767df033ef b/.bun-tag-c27543767df033ef
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/index.js b/dist/index.js
+index 4c22197e26695b82feb96f75e2f2922e3fa7d77c..d9fce004cca22b523d6811362d00dc33c9bdd59a 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -173,6 +173,8 @@ const streamText = (options) => {
+     messages.push({ content: text, role: "assistant", tool_calls });
+     if (tool_calls.length !== 0) {
+       for (const toolCall of tool_calls) {
++        if (toolCall == null)
++          continue
+         const { completionToolCall, completionToolResult, message } = await executeTool({
+           abortSignal: options.abortSignal,
+           messages,

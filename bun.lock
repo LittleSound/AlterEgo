@@ -26,6 +26,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@xsai/stream-text@0.4.0-beta.3": "patches/@xsai%2Fstream-text@0.4.0-beta.3.patch",
+  },
   "overrides": {
     "@sinclair/typebox": "0.34.33",
   },
