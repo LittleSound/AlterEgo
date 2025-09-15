@@ -51,4 +51,15 @@ export const appEnvConfig = env({
     default: 5432,
     description: 'PostgreSQL port',
   }),
+
+  // Talkative Random Reply
+  TALKATIVE_RANDOM_REPLY_ENABLED: t.Boolean({
+    default: true,
+    description: 'Enable random probabilistic replies',
+  }),
+  // 覆盖每个模式默认的随机回复的概率
+  TALKATIVE_RANDOM_REPLY_COVERAGE_PROBABILITY: t.Number({
+    default: -1,
+    description: 'Override default probability for each pattern 0.0 - 1.0, the -1 means no override',
+  }),
 })

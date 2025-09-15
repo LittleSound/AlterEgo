@@ -1,4 +1,4 @@
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { Context } from 'grammy'
 import type { Message } from 'grammy/types'
 import type { GroupChatSessionMemory, PrivateChatSessionMemory } from './memory'
@@ -10,6 +10,7 @@ import { appEnvConfig } from './env'
 import { cleanAIResponse, convertToTelegramHtml, formatRequestMessage } from './format'
 import { defineLogStreamed, error, getVerboseMode, log, setVerboseMode } from './log'
 import { getGroupChatSession, getPrivateChatSession, getMemoryStats as getSessionMemoryStats } from './memory'
+import { handleProbabilisticReply } from './probabilisticReply'
 import { systemPrompt } from './prompt'
 import { setupTools } from './tool'
 import { getFormatedMemoriesMessage, getMemories, getMemorySyncStatus, remember, setMaxMemoryCount, setupMemoryDatabase } from './tool/memory'
@@ -18,7 +19,7 @@ import { invoke } from './utils'
 const EDIT_MESSAGE_INTERVAL = 1000
 
 let theBot: Bot
-let theDatabase: NodePgDatabase | null = null
+let theDatabase: PostgresJsDatabase | null = null
 let theAiTools: ReturnType<typeof setupTools> extends Promise<infer R> ? R : never
 
 const app = new Elysia()
@@ -135,14 +136,24 @@ const app = new Elysia()
     // 提及和回复此 Bot 的消息由上面的处理器处理并记录，所以这里不会包括
     bot.on('message:text').filter((ctx) => {
       return (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup')
-    }, ctx => silentlyRecordMessage(ctx))
+    }, (ctx) => {
+      silentlyRecordMessage(ctx)
+
+      // 尝试概率回复
+      if (env.TALKATIVE_RANDOM_REPLY_ENABLED) {
+        const result = handleProbabilisticReply(ctx, { envCoveredProbability: env.TALKATIVE_RANDOM_REPLY_COVERAGE_PROBABILITY })
+        if (result.shouldReply && result.reply) {
+          silentlyRecordMessage(ctx, { isAssistant: true })
+        }
+      }
+    })
 
     // 不是 @ 自己的消息，那就默默记录下来吧
     bot.on('message:entities', ctx => silentlyRecordMessage(ctx))
 
     // AI 会默默记录下群聊中的消息，直到有人 @ 它 或 回复它 才会进行回答
     // 这样可以让 AI 了解群聊的上下文，但不会打扰到大家
-    function silentlyRecordMessage(ctx: Context) {
+    function silentlyRecordMessage(ctx: Context, options?: { isAssistant?: boolean }) {
       if (!ctx.message?.text)
         return
 
@@ -155,7 +166,12 @@ const app = new Elysia()
         return
 
       const session = getGroupChatSession(chatId)
-      session.addUserMessage(requestMsgText, { userId, userName })
+      if (options?.isAssistant) {
+        session.addAssistantMessage(requestMsgText)
+      }
+      else {
+        session.addUserMessage(requestMsgText, { userId, userName })
+      }
 
       log(`[SILENT] ${userName} (${userId}) in ${ctx.chat?.title || 'group'}:`, requestMsgText)
     }
