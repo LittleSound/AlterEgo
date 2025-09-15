@@ -188,7 +188,6 @@ const app = new Elysia()
         return
 
       let theMsg: Message.TextMessage
-      let lastTime = Date.now()
       // 是否有 function calling
       let isWithWorking = false
       let isThinking = false
@@ -204,6 +203,10 @@ const app = new Elysia()
       // 回复的消息，修改这个值会直接发送或修改这条消息
       const replyMessage = invoke(() => {
         let value = ''
+
+        let lastUpdateTime = 0
+        let throttleTimer: Timer | null = null
+
         return {
           get value() {
             return value
@@ -213,10 +216,34 @@ const app = new Elysia()
               return
             const oldValue = value
             value = convertToTelegramHtml(text)
-            if (theMsg)
-              editMessage(value, oldValue)
-            else
+
+            if (!theMsg) {
               newMessage(value)
+              lastUpdateTime = Date.now()
+              return
+            }
+
+            const now = Date.now()
+            const timeSinceLastUpdate = now - lastUpdateTime
+
+            if (timeSinceLastUpdate >= EDIT_MESSAGE_INTERVAL) {
+              // 可以立即更新
+              editMessage(value, oldValue)
+              lastUpdateTime = now
+            }
+            else {
+              if (!throttleTimer) {
+                // 设置定时器，在下个时间窗口更新
+                const delay = EDIT_MESSAGE_INTERVAL - timeSinceLastUpdate
+                throttleTimer = setTimeout(() => {
+                  if (value) {
+                    editMessage(value, oldValue)
+                    lastUpdateTime = Date.now()
+                  }
+                  throttleTimer = null
+                }, delay)
+              }
+            }
           },
         }
 
@@ -294,11 +321,8 @@ const app = new Elysia()
           replyTextList.push(textPart)
           writeLog(textPart)
 
-          if (Date.now() - lastTime > EDIT_MESSAGE_INTERVAL) {
-            lastTime = Date.now()
-            const cleanedPartial = cleanAIResponse(replyTextList.join(''))
-            replyMessage.value = `${isWithWorking ? `\n🟠 Working...\n${getToolsLog()}` : (isThinking && !cleanedPartial.length) ? '🟢 Thinking...' : '🟢 Typing...'}\n\n${cleanedPartial}${'...'}`
-          }
+          const cleanedPartial = cleanAIResponse(replyTextList.join(''))
+          replyMessage.value = `${isWithWorking ? `\n🟠 Working...\n${getToolsLog()}` : (isThinking && !cleanedPartial.length) ? '🟢 Thinking...' : '🟢 Typing...'}\n\n${cleanedPartial}${'...'}`
         }
         writeLog('\n')
 
