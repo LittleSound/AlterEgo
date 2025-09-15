@@ -4,7 +4,7 @@ import type { Message } from 'grammy/types'
 import type { GroupChatSessionMemory, PrivateChatSessionMemory } from './memory'
 import { streamText } from '@xsai/stream-text'
 import { Elysia } from 'elysia'
-import { Bot, webhookCallback } from 'grammy'
+import { Bot, GrammyError, webhookCallback } from 'grammy'
 import { setupDatabase } from './database'
 import { appEnvConfig } from './env'
 import { cleanAIResponse, convertToTelegramHtml, formatRequestMessage } from './format'
@@ -203,6 +203,7 @@ const app = new Elysia()
       // 回复的消息，修改这个值会直接发送或修改这条消息
       const replyMessage = invoke(() => {
         let value = ''
+        let oldValue = ''
 
         let lastUpdateTime = 0
         let throttleTimer: Timer | null = null
@@ -214,12 +215,12 @@ const app = new Elysia()
           set value(text: string) {
             if (!text || text.trim() === '')
               return
-            const oldValue = value
             value = convertToTelegramHtml(text)
 
-            if (!theMsg) {
+            if (!theMsg && lastUpdateTime === 0) {
               newMessage(value)
               lastUpdateTime = Date.now()
+              oldValue = value
               return
             }
 
@@ -230,6 +231,7 @@ const app = new Elysia()
               // 可以立即更新
               editMessage(value, oldValue)
               lastUpdateTime = now
+              oldValue = value
             }
             else {
               if (!throttleTimer) {
@@ -239,6 +241,7 @@ const app = new Elysia()
                   if (value) {
                     editMessage(value, oldValue)
                     lastUpdateTime = Date.now()
+                    oldValue = value
                   }
                   throttleTimer = null
                 }, delay)
@@ -261,12 +264,22 @@ const app = new Elysia()
         async function editMessage(newValue: string, oldValue: string) {
           if (newValue === oldValue)
             return
-          await ctx.api.editMessageText(
-            theMsg.chat.id,
-            theMsg.message_id,
-            newValue,
-            { parse_mode: 'HTML' },
-          )
+
+          try {
+            await ctx.api.editMessageText(
+              theMsg.chat.id,
+              theMsg.message_id,
+              newValue,
+              { parse_mode: 'HTML' },
+            )
+          }
+          catch (err) {
+            // 忽略"内容未修改"的错误，这是正常的
+            if (err instanceof GrammyError && err.description.includes('message is not modified')) {
+              return
+            }
+            throw err
+          }
         }
       })
 
@@ -293,6 +306,32 @@ const app = new Elysia()
           text += `\n\n${cleanedPartial}${'...'}`
         }
         return text
+      }
+
+      function handleError(err: unknown) {
+        error('Error processing message:', err)
+        const errorText = '🔴 Something went wrong. I don\'t know what to say next...'
+        if (theMsg) {
+          const hasSomeMessage = replyTextList.length > 0 || toolCalls.length > 0
+          const finalErrorMsg = hasSomeMessage
+            ? `${createReplyProcessText()}\n\n${errorText}`
+            : errorText
+
+          // 让 AI 知道自己出错了。用户问的时候，AI 可以回答为什么出错了。
+          option.addAssistantMessage(err instanceof Error
+            ? `${finalErrorMsg}\n\nAlter Ego System Error Log: ${err.toString()}`
+            : finalErrorMsg,
+          )
+          replyMessage.value = finalErrorMsg
+        }
+        else {
+          // 让 AI 知道自己出错了。用户问的时候，AI 可以回答为什么出错了。
+          option.addAssistantMessage(err instanceof Error
+            ? `${errorText}\n\nAlter Ego System Error Log: ${err.toString()}`
+            : errorText,
+          )
+          replyMessage.value = errorText
+        }
       }
 
       invoke(async () => {
@@ -351,29 +390,7 @@ const app = new Elysia()
           ? `☑️ Done working\n${finalResponse}`
           : finalResponse
       }).catch(async (err) => {
-        error('Error processing message:', err)
-        const errorText = '🔴 Something went wrong. I don\'t know what to say next...'
-        if (theMsg) {
-          const hasSomeMessage = replyTextList.length > 0 || toolCalls.length > 0
-          const finalErrorMsg = hasSomeMessage
-            ? `${createReplyProcessText()}\n\n${errorText}`
-            : errorText
-
-          // 让 AI 知道自己出错了。用户问的时候，AI 可以回答为什么出错了。
-          option.addAssistantMessage(err instanceof Error
-            ? `${finalErrorMsg}\n\nAlter Ego System Error Log: ${err.toString()}`
-            : finalErrorMsg,
-          )
-          replyMessage.value = finalErrorMsg
-        }
-        else {
-          // 让 AI 知道自己出错了。用户问的时候，AI 可以回答为什么出错了。
-          option.addAssistantMessage(err instanceof Error
-            ? `${errorText}\n\nAlter Ego System Error Log: ${err.toString()}`
-            : errorText,
-          )
-          replyMessage.value = errorText
-        }
+        handleError(err)
       }).finally(() => {
         // 输出内存统计
         if (!getVerboseMode())
