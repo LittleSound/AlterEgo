@@ -1,4 +1,4 @@
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { Message } from 'xsai'
 import * as v from 'valibot'
 import { tool } from 'xsai'
@@ -11,7 +11,7 @@ interface MemoryItem {
 }
 
 let maxMemoryCount = 10
-let database: NodePgDatabase | null = null
+let database: PostgresJsDatabase | null = null
 let isMemorySynchronized = false
 
 const memoryStorage = new Map<number, MemoryItem[]>()
@@ -20,7 +20,7 @@ export function setMaxMemoryCount(count: number) {
   maxMemoryCount = count
 }
 
-export function setupMemoryDatabase(_db: NodePgDatabase | null) {
+export function setupMemoryDatabase(_db: PostgresJsDatabase | null) {
   if (database) {
     error('Memory database is already set, cannot set again.')
     return
