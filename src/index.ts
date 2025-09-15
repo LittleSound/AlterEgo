@@ -43,11 +43,15 @@ const app = new Elysia()
     setMaxMemoryCount(env.AI_MEMORY_MAX_COUNT)
   })
   // setup AI tools
-  .derive(async () => {
+  .derive(async ({ env }) => {
     if (theAiTools) {
       return { aiTools: theAiTools }
     }
-    const aiTools = theAiTools = await setupTools()
+    const aiTools = theAiTools = await setupTools({
+      BROWSE_ENABLED: env.BROWSE_ENABLED,
+      BROWSE_MAX_TOKENS: env.BROWSE_MAX_TOKENS,
+      JINA_API_TOKEN: env.JINA_API_TOKEN,
+    })
     return { aiTools }
   })
   .derive(({ env, aiTools }) => {

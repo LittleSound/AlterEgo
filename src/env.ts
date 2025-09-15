@@ -62,4 +62,18 @@ export const appEnvConfig = env({
     default: -1,
     description: 'Override default probability for each pattern 0.0 - 1.0, the -1 means no override',
   }),
+
+  // Browse Tool
+  BROWSE_ENABLED: t.Boolean({
+    default: true,
+    description: 'Enable browse tool for fetching webpage content',
+  }),
+  BROWSE_MAX_TOKENS: t.Number({
+    default: 16000,
+    description: 'Maximum tokens for webpage content (affects content truncation)',
+  }),
+  JINA_API_TOKEN: t.String({
+    default: '',
+    error: 'A valid Jina AI Reader API token is required!',
+  }),
 })
