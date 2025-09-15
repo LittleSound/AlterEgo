@@ -1,11 +1,19 @@
+diff --git a/node_modules/@xsai/stream-text/.bun-tag-2cb9029fb9bd139d b/.bun-tag-2cb9029fb9bd139d
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@xsai/stream-text/.bun-tag-73ca8ef40b02f961 b/.bun-tag-73ca8ef40b02f961
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/@xsai/stream-text/.bun-tag-c27543767df033ef b/.bun-tag-c27543767df033ef
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/dist/index.js b/dist/index.js
-index 4c22197e26695b82feb96f75e2f2922e3fa7d77c..d9fce004cca22b523d6811362d00dc33c9bdd59a 100644
+index 4c22197e26695b82feb96f75e2f2922e3fa7d77c..a777885241af610cb01edf0644754586737f7c47 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -173,6 +173,8 @@ const streamText = (options) => {
+@@ -171,8 +171,10 @@ const streamText = (options) => {
+       }
+     }));
      messages.push({ content: text, role: "assistant", tool_calls });
 -    if (tool_calls.length !== 0) {
 +    if (tool_calls.filter(i => i != null && i.function?.name).length !== 0) {
@@ -15,3 +23,20 @@ index 4c22197e26695b82feb96f75e2f2922e3fa7d77c..d9fce004cca22b523d6811362d00dc33
          const { completionToolCall, completionToolResult, message } = await executeTool({
            abortSignal: options.abortSignal,
            messages,
+@@ -200,8 +202,14 @@ const streamText = (options) => {
+       toolResults,
+       usage
+     });
+-    if (toolCalls.length !== 0 && steps.length < maxSteps)
+-      return async () => doStream();
++    if (toolCalls.length !== 0) {
++      if (steps.length < maxSteps) {
++        return async () => doStream();
++      } else if (steps.length === maxSteps) {
++        messages.push({ role: "assistant", content: "Thought: I have used all my steps. I need to provide a final answer.\nAction: finish" });
++        return async () => doStream();
++      }
++    }
+   };
+   void (async () => {
+     try {
