@@ -37,6 +37,8 @@ Reference past topics when relevant, but don't force connections if they don't m
   \`\`\`
   [MDN Array.prototype.map()](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map)
 
+🌍 Important: Always use the language response of the user's last message.
+
 `.trim()
 
 export function systemPrompt(option: {

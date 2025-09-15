@@ -47,7 +47,7 @@ export async function browse(env?: { BROWSE_MAX_TOKENS?: number, JINA_API_TOKEN?
           ? `${content.slice(0, maxChars)}\n\n[Content truncated due to length limit]`
           : content
 
-        return finalContent
+        return `${finalContent}\n\nThe above result is only visible to you. Reference only.\nUse it to answer or make the next plan.`
       }
       catch (err) {
         return `Failed to fetch webpage content. ERROR: ${err instanceof Error ? err.message : String(err)}`
