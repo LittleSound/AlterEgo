@@ -32,8 +32,8 @@ index 4c22197e26695b82feb96f75e2f2922e3fa7d77c..a777885241af610cb01edf0644754586
 +    if (toolCalls.length !== 0) {
 +      if (steps.length < maxSteps) {
 +        return async () => doStream();
-+      } else if (steps.length === maxSteps) {
-+        messages.push({ role: "assistant", content: "Thought: I have used all my steps. I need to provide a final answer.\nAction: finish" });
++      } else if (steps.length >= maxSteps && steps.length < maxSteps + 10) {
++        messages.push({ role: "assistant", content: "Thought: I\’ve already used up all the tool call limits. I need to provide the final answer immediately." });
 +        return async () => doStream();
 +      }
 +    }
