@@ -277,6 +277,24 @@ const app = new Elysia()
         }).join('\n')
       }
 
+      function createReplyProcessText() {
+        const cleanedPartial = replyTextList.length ? cleanAIResponse(replyTextList.join('')) : ''
+        let text = ''
+        if (isWithWorking) {
+          text += `🟠 Working...\n${getToolsLog()}`
+        }
+        else if (isThinking && !cleanedPartial.length) {
+          text += '🟢 Thinking...'
+        }
+        else {
+          text += '🟢 Typing...'
+        }
+        if (cleanedPartial.length) {
+          text += `\n\n${cleanedPartial}${'...'}`
+        }
+        return text
+      }
+
       invoke(async () => {
         replyMessage.value = '🔵 Connecting...'
 
@@ -308,11 +326,12 @@ const app = new Elysia()
             if (event.type !== 'tool-call') {
               return
             }
+            isWithWorking = true
 
             log(`[TOOL] Calling tool: ${event.toolName} with args: ${event.args}`)
             toolCalls.push({ toolName: event.toolName, args: event.args })
 
-            replyMessage.value = `🟠 Working...\n${getToolsLog()}`
+            replyMessage.value = createReplyProcessText()
           },
         })
 
@@ -321,8 +340,7 @@ const app = new Elysia()
           replyTextList.push(textPart)
           writeLog(textPart)
 
-          const cleanedPartial = cleanAIResponse(replyTextList.join(''))
-          replyMessage.value = `${isWithWorking ? `\n🟠 Working...\n${getToolsLog()}` : (isThinking && !cleanedPartial.length) ? '🟢 Thinking...' : '🟢 Typing...'}\n\n${cleanedPartial}${'...'}`
+          replyMessage.value = createReplyProcessText()
         }
         writeLog('\n')
 
@@ -336,11 +354,9 @@ const app = new Elysia()
         error('Error processing message:', err)
         const errorText = '🔴 Something went wrong. I don\'t know what to say next...'
         if (theMsg) {
-          const partialResponse = replyTextList.length > 0
-            ? cleanAIResponse(replyTextList.join(''))
-            : ''
-          const finalErrorMsg = partialResponse
-            ? `${partialResponse}\n\n${errorText}`
+          const hasSomeMessage = replyTextList.length > 0 || toolCalls.length > 0
+          const finalErrorMsg = hasSomeMessage
+            ? `${createReplyProcessText()}\n\n${errorText}`
             : errorText
 
           // 让 AI 知道自己出错了。用户问的时候，AI 可以回答为什么出错了。
