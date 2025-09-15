@@ -68,6 +68,10 @@ export const appEnvConfig = env({
     default: true,
     description: 'Enable browse tool for fetching webpage content',
   }),
+  SEARCH_ENABLED: t.Boolean({
+    default: true,
+    description: 'Enable search tool for web searching',
+  }),
   BROWSE_MAX_TOKENS: t.Number({
     default: 16000,
     description: 'Maximum tokens for webpage content (affects content truncation)',

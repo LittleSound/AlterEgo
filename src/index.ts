@@ -47,11 +47,7 @@ const app = new Elysia()
     if (theAiTools) {
       return { aiTools: theAiTools }
     }
-    const aiTools = theAiTools = await setupTools({
-      BROWSE_ENABLED: env.BROWSE_ENABLED,
-      BROWSE_MAX_TOKENS: env.BROWSE_MAX_TOKENS,
-      JINA_API_TOKEN: env.JINA_API_TOKEN,
-    })
+    const aiTools = theAiTools = await setupTools(env)
     return { aiTools }
   })
   .derive(({ env, aiTools }) => {
