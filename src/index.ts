@@ -7,7 +7,7 @@ import { appEnvConfig } from './env'
 import { convertToTelegramHtml } from './format'
 import { setVerboseMode } from './log'
 import { shouldReplyProbabilistically } from './probabilisticReply'
-import { getSessionMemoryStats, recordMessage, recordText } from './session'
+import { getSessionByCtx, getSessionMemoryStats, recordMessage, recordText } from './session'
 import { setupTools } from './tool'
 import { getMemories, getMemorySyncStatus, setMaxMemoryCount, setupMemoryDatabase } from './tool/memory'
 
@@ -82,9 +82,22 @@ const app = new Elysia()
       ctx.reply(convertToTelegramHtml(replyText), { parse_mode: 'HTML' })
     })
 
+    bot.command('clear', (ctx) => {
+      if (ctx.chat?.type !== 'private') {
+        ctx.reply('⚠️ Context can only be cleared in private chats.')
+        return
+      }
+
+      ctx.reply('**🧹 Context cleared**')
+      const session = getSessionByCtx(ctx)
+      if (session) {
+        session.clear()
+      }
+    })
+
     // 处理 @ 提及
     bot.on('message:entities').filter((ctx) => {
-      if (!ctx.message?.text) {
+      if (!ctx.msg) {
         return false
       }
       // 检查是否提及了机器人
@@ -124,8 +137,8 @@ const app = new Elysia()
           }
           else {
             ctx.reply(result.reply, {
-              reply_parameters: ctx.message?.message_id
-                ? { message_id: ctx.message.message_id }
+              reply_parameters: ctx.msg?.message_id
+                ? { message_id: ctx.msg.message_id }
                 : undefined,
             })
             recordText(ctx, result.reply, { isAssistant: true })
@@ -135,7 +148,7 @@ const app = new Elysia()
     })
 
     // 记录所有未回应的消息
-    bot.on('message').filter(ctx => !!ctx.message, ctx => recordMessage(ctx.msg))
+    bot.on('message').filter(ctx => !!ctx.msg, ctx => recordMessage(ctx.msg))
 
     return { bot }
   })

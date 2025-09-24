@@ -23,7 +23,9 @@ export function replyMessageWithAI(options: {
 }) {
   const { ctx, env, aiTools } = options
 
-  if (!ctx.message || !ctx.chat?.id)
+  const requestMsg = ctx.msg
+
+  if (!requestMsg || !ctx.chat?.id)
     return
 
   let theMsg: Message.TextMessage
@@ -31,7 +33,7 @@ export function replyMessageWithAI(options: {
   let isWithWorking = false
   let isThinking = false
 
-  const requestMsgText = formatMessage(ctx.message)
+  const requestMsgText = formatMessage(requestMsg)
   const userName = formatName(ctx.from)
   const userId = ctx.from?.id || 0
   const replyTextList: string[] = []
@@ -91,10 +93,10 @@ export function replyMessageWithAI(options: {
 
     async function newMessage(newValue: string) {
       // 如果是 @ 或回复，则回复原消息
-      const shouldReplyToMessage = ctx.message?.text?.includes('@') || ctx.msg?.reply_to_message
+      const shouldReplyToMessage = requestMsg?.text?.includes('@') || requestMsg?.reply_to_message
       theMsg = await ctx.reply(newValue, {
-        reply_parameters: shouldReplyToMessage && ctx.message?.message_id
-          ? { message_id: ctx.message.message_id }
+        reply_parameters: shouldReplyToMessage && requestMsg?.message_id
+          ? { message_id: requestMsg.message_id }
           : undefined,
         parse_mode: 'HTML',
       })

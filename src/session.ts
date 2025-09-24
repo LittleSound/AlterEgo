@@ -49,6 +49,12 @@ export class BasicChatSessionMemory<T extends llmMessage> {
   toMessages(): llmMessage[] {
     return [...this.msg]
   }
+
+  clear() {
+    this.msg.length = 0
+    this.updatedAt = Date.now()
+    return this
+  }
 }
 
 export class PrivateChatSessionMemory extends BasicChatSessionMemory<PrivateMessage> {
