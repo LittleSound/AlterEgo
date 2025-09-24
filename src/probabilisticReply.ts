@@ -10,7 +10,7 @@ interface ReplyPattern {
 const replyPatterns: ReplyPattern[] = [
   { // foo是bar吗？
     name: 'foo是bar吗？',
-    pattern: /是.+[吗吧嘛][？?]?$/,
+    pattern: /是.*?[吗吧嘛][？?]?$/,
     replies: [
       // 肯定
       '是的呢～',
