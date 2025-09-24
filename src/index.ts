@@ -7,7 +7,7 @@ import { Elysia } from 'elysia'
 import { Bot, GrammyError, webhookCallback } from 'grammy'
 import { setupDatabase } from './database'
 import { appEnvConfig } from './env'
-import { cleanAIResponse, convertToTelegramHtml, formatRequestMessage } from './format'
+import { cleanAIResponse, convertToTelegramHtml, formatMessage, formatName } from './format'
 import { defineLogStreamed, error, getVerboseMode, log, setVerboseMode } from './log'
 import { getGroupChatSession, getPrivateChatSession, getMemoryStats as getSessionMemoryStats } from './memory'
 import { handleProbabilisticReply } from './probabilisticReply'
@@ -103,7 +103,7 @@ const app = new Elysia()
     }, (ctx) => {
       const session = getGroupChatSession(ctx.chat.id)
       handleTextMessage(ctx, {
-        addUserMessage: content => session.addUserMessage(content, { userId: ctx.from?.id || 0, userName: ctx.from?.first_name || 'User' }),
+        addUserMessage: content => session.addUserMessage(content, { userId: ctx.from?.id || 0, userName: formatName(ctx.from) }),
         addAssistantMessage: content => session.addAssistantMessage(content),
         session,
       })
@@ -113,15 +113,15 @@ const app = new Elysia()
     bot.on('message').filter(ctx => !!(ctx.chat.type !== 'private' && ctx.msg.reply_to_message && ctx.msg.reply_to_message.from?.username === ctx.me.username && ctx.msg.text), (ctx) => {
       const session = getGroupChatSession(ctx.chat.id)
       handleTextMessage(ctx, {
-        addUserMessage: content => session.addUserMessage(content, { userId: ctx.from?.id || 0, userName: ctx.from?.first_name || 'User' }),
+        addUserMessage: content => session.addUserMessage(content, { userId: ctx.from?.id || 0, userName: formatName(ctx.from) }),
         addAssistantMessage: content => session.addAssistantMessage(content),
         session,
       })
     })
 
-    // 处理私聊消息
-    bot.on('message:text').filter(ctx => ctx.chat.type === 'private', (ctx) => {
-      const userName = ctx.from?.first_name || 'User'
+    // 回复私聊消息， 忽略转发的消息
+    bot.on('message:text').filter(ctx => ctx.chat.type === 'private' && ctx.msg.forward_origin == null, (ctx) => {
+      const userName = formatName(ctx.from)
       const userId = ctx.from?.id || 0
       const chatId = ctx.chat.id
       const session = getPrivateChatSession(userId, userName, chatId)
@@ -148,24 +148,22 @@ const app = new Elysia()
       }
     })
 
-    // 不是 @ 自己的消息，那就默默记录下来吧
-    bot.on('message:entities', ctx => silentlyRecordMessage(ctx))
+    // 记录所有未回应的消息
+    bot.on('message').filter(ctx => !!ctx.message, ctx => silentlyRecordMessage(ctx))
 
-    // AI 会默默记录下群聊中的消息，直到有人 @ 它 或 回复它 才会进行回答
+    // AI 会默默记录下不回复的消息，直到需要回答时使用
     // 这样可以让 AI 了解群聊的上下文，但不会打扰到大家
     function silentlyRecordMessage(ctx: Context, options?: { isAssistant?: boolean }) {
-      if (!ctx.message?.text)
-        return
-
-      const requestMsgText = formatRequestMessage(ctx)
-      const userName = ctx.from?.first_name || 'User'
+      const requestMsgText = formatMessage(ctx.message)
+      const userName = formatName(ctx.from)
       const userId = ctx.from?.id || 0
       const chatId = ctx.chat?.id
+      const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup'
 
       if (!chatId)
         return
 
-      const session = getGroupChatSession(chatId)
+      const session = isGroup ? getGroupChatSession(chatId) : getPrivateChatSession(userId, userName, chatId)
       if (options?.isAssistant) {
         session.addAssistantMessage(requestMsgText)
       }
@@ -173,7 +171,10 @@ const app = new Elysia()
         session.addUserMessage(requestMsgText, { userId, userName })
       }
 
-      log(`[SILENT] ${userName} (${userId}) in ${ctx.chat?.title || 'group'}:`, requestMsgText)
+      if (isGroup)
+        log(`[SILENT] ${userName} (${userId}) in ${ctx.chat?.title || 'group'}:`, requestMsgText)
+      else
+        log(`[SILENT] ${userName} (${userId}) in private chat:`, requestMsgText)
     }
 
     // 当 AI 收到用户的消息时，比如直接私聊，或者是在群里 @ 它，或者回复它
@@ -184,7 +185,7 @@ const app = new Elysia()
       addAssistantMessage: (content: string) => void
       session: GroupChatSessionMemory | PrivateChatSessionMemory
     }) {
-      if (!ctx.message?.text || !ctx.chat?.id)
+      if (!ctx.message || !ctx.chat?.id)
         return
 
       let theMsg: Message.TextMessage
@@ -192,8 +193,8 @@ const app = new Elysia()
       let isWithWorking = false
       let isThinking = false
 
-      const requestMsgText = formatRequestMessage(ctx)
-      const userName = ctx.from?.first_name || 'User'
+      const requestMsgText = formatMessage(ctx.message)
+      const userName = formatName(ctx.from)
       const userId = ctx.from?.id || 0
       const replyTextList: string[] = []
       const toolCalls: { toolName: string, args: string }[] = []
