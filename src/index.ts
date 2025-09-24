@@ -88,7 +88,7 @@ const app = new Elysia()
         return
       }
 
-      ctx.reply('**🧹 Context cleared**')
+      ctx.reply(convertToTelegramHtml('**🧹 Context cleared**'), { parse_mode: 'HTML' })
       const session = getSessionByCtx(ctx)
       if (session) {
         session.clear()
