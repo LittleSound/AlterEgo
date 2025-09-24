@@ -1,7 +1,10 @@
+import type { Static } from 'elysia'
 import { env } from '@yolk-oss/elysia-env'
 import { t } from 'elysia'
 
-export const appEnvConfig = env({
+// 获取环境变量配置的类型
+// 方法1: 直接从配置对象推断类型
+const envSchema = {
   // CLI Options
   VERBOSE: t.Boolean({
     default: false,
@@ -85,4 +88,9 @@ export const appEnvConfig = env({
     default: '',
     error: 'A valid Jina AI Reader API token is required!',
   }),
-})
+}
+
+export const appEnvConfig = env(envSchema)
+
+// 导出类型，可以在其他地方使用
+export type AppEnv = Static<import('@sinclair/typebox').TObject<typeof envSchema>>

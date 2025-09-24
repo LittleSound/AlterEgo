@@ -149,7 +149,7 @@ export function getGroupChatSession(chatId: number): GroupChatSessionMemory {
   return session
 }
 
-export function getMemoryStats(): { sessionsCount: number, totalMessages: number } {
+export function getSessionMemoryStats(): { sessionsCount: number, totalMessages: number } {
   let totalMessages = 0
 
   for (const [,session] of chatSessionsMap) {
