@@ -13,7 +13,7 @@ export async function search(env?: { BROWSE_MAX_TOKENS?: number, JINA_API_TOKEN?
     }),
     execute: async ({ query }) => {
       const abort = new AbortController()
-      const timeout = setTimeout(() => abort.abort(), 15_000)
+      const timeout = setTimeout(() => abort.abort(), 1000 * 60)
 
       try {
         const searchUrl = new URL('https://s.jina.ai/')

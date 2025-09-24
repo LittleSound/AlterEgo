@@ -27,7 +27,7 @@ export async function weather() {
       const lang = 'en'
       const units = 'metric'
       const abort = new AbortController()
-      const timeout = setTimeout(() => abort.abort(), 10_000)
+      const timeout = setTimeout(() => abort.abort(), 1000 * 60)
       try {
         // 1) Geocode the location name to lat/lon
         const geo = await geocode(location, lang, abort.signal)
