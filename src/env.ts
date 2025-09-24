@@ -62,6 +62,11 @@ export const appEnvConfig = env({
     default: -1,
     description: 'Override default probability for each pattern 0.0 - 1.0, the -1 means no override',
   }),
+  // 直接生成回复
+  TALKATIVE_RANDOM_REPLY_GEN_MESSAGE_ENABLED: t.Boolean({
+    default: true,
+    description: 'Enable generate message for random probabilistic replies',
+  }),
 
   // Browse Tool
   BROWSE_ENABLED: t.Boolean({

@@ -1,4 +1,3 @@
-import type { Context } from 'grammy'
 import { log } from './log'
 
 interface ReplyPattern {
@@ -173,22 +172,4 @@ export function shouldReplyProbabilistically(text: string, options: { envCovered
   }
 
   return { shouldReply: false }
-}
-
-export function handleProbabilisticReply(ctx: Context, options: { envCoveredProbability?: number }): { shouldReply: boolean, reply?: string } {
-  if (!ctx.message?.text) {
-    return { shouldReply: false }
-  }
-
-  const result = shouldReplyProbabilistically(ctx.message.text, options)
-
-  if (result.shouldReply && result.reply) {
-    ctx.reply(result.reply, {
-      reply_parameters: ctx.message?.message_id
-        ? { message_id: ctx.message.message_id }
-        : undefined,
-    })
-  }
-
-  return result
 }

@@ -1,7 +1,6 @@
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { Context } from 'grammy'
 import type { Message } from 'grammy/types'
-import type { GroupChatSessionMemory, PrivateChatSessionMemory } from './memory'
 import { streamText } from '@xsai/stream-text'
 import { Elysia } from 'elysia'
 import { Bot, GrammyError, webhookCallback } from 'grammy'
@@ -9,8 +8,8 @@ import { setupDatabase } from './database'
 import { appEnvConfig } from './env'
 import { cleanAIResponse, convertToTelegramHtml, formatMessage, formatName } from './format'
 import { defineLogStreamed, error, getVerboseMode, log, setVerboseMode } from './log'
-import { getGroupChatSession, getPrivateChatSession, getMemoryStats as getSessionMemoryStats } from './memory'
-import { handleProbabilisticReply } from './probabilisticReply'
+import { getChatHistory, getMemoryStats as getSessionMemoryStats, recordAssistantText, recordMessage, recordText, recordUserText } from './memory'
+import { shouldReplyProbabilistically } from './probabilisticReply'
 import { systemPrompt } from './prompt'
 import { setupTools } from './tool'
 import { getFormatedMemoriesMessage, getMemories, getMemorySyncStatus, remember, setMaxMemoryCount, setupMemoryDatabase } from './tool/memory'
@@ -101,35 +100,17 @@ const app = new Elysia()
       )
       return isBotMentioned
     }, (ctx) => {
-      const session = getGroupChatSession(ctx.chat.id)
-      handleTextMessage(ctx, {
-        addUserMessage: content => session.addUserMessage(content, { userId: ctx.from?.id || 0, userName: formatName(ctx.from) }),
-        addAssistantMessage: content => session.addAssistantMessage(content),
-        session,
-      })
+      replyMessageWithAI(ctx)
     })
 
     // 处理回复消息
     bot.on('message').filter(ctx => !!(ctx.chat.type !== 'private' && ctx.msg.reply_to_message && ctx.msg.reply_to_message.from?.username === ctx.me.username && ctx.msg.text), (ctx) => {
-      const session = getGroupChatSession(ctx.chat.id)
-      handleTextMessage(ctx, {
-        addUserMessage: content => session.addUserMessage(content, { userId: ctx.from?.id || 0, userName: formatName(ctx.from) }),
-        addAssistantMessage: content => session.addAssistantMessage(content),
-        session,
-      })
+      replyMessageWithAI(ctx)
     })
 
     // 回复私聊消息， 忽略转发的消息
     bot.on('message:text').filter(ctx => ctx.chat.type === 'private' && ctx.msg.forward_origin == null, (ctx) => {
-      const userName = formatName(ctx.from)
-      const userId = ctx.from?.id || 0
-      const chatId = ctx.chat.id
-      const session = getPrivateChatSession(userId, userName, chatId)
-      handleTextMessage(ctx, {
-        addUserMessage: content => session.addUserMessage(content),
-        addAssistantMessage: content => session.addAssistantMessage(content),
-        session,
-      })
+      replyMessageWithAI(ctx)
     })
 
     // 群聊中的普通消息 - 仅记录，不回复（需要机器人是管理员）
@@ -137,54 +118,35 @@ const app = new Elysia()
     bot.on('message:text').filter((ctx) => {
       return (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup')
     }, (ctx) => {
-      silentlyRecordMessage(ctx)
+      recordMessage(ctx.msg)
 
       // 尝试概率回复
-      if (env.TALKATIVE_RANDOM_REPLY_ENABLED) {
-        const result = handleProbabilisticReply(ctx, { envCoveredProbability: env.TALKATIVE_RANDOM_REPLY_COVERAGE_PROBABILITY })
+      if (env.TALKATIVE_RANDOM_REPLY_ENABLED && ctx.msg && (ctx.msg.text || ctx.msg.caption)) {
+        const result = shouldReplyProbabilistically(ctx.msg.text || ctx.msg.caption || '', { envCoveredProbability: env.TALKATIVE_RANDOM_REPLY_COVERAGE_PROBABILITY })
         if (result.shouldReply && result.reply) {
-          silentlyRecordMessage(ctx, { isAssistant: true })
+          // 如果开启了生成消息，则使用 AI 回复,否则用一些配置好的随机内容来回复
+          if (env.TALKATIVE_RANDOM_REPLY_GEN_MESSAGE_ENABLED) {
+            replyMessageWithAI(ctx)
+          }
+          else {
+            ctx.reply(result.reply, {
+              reply_parameters: ctx.message?.message_id
+                ? { message_id: ctx.message.message_id }
+                : undefined,
+            })
+            recordText(ctx, result.reply, { isAssistant: true })
+          }
         }
       }
     })
 
     // 记录所有未回应的消息
-    bot.on('message').filter(ctx => !!ctx.message, ctx => silentlyRecordMessage(ctx))
-
-    // AI 会默默记录下不回复的消息，直到需要回答时使用
-    // 这样可以让 AI 了解群聊的上下文，但不会打扰到大家
-    function silentlyRecordMessage(ctx: Context, options?: { isAssistant?: boolean }) {
-      const requestMsgText = formatMessage(ctx.message)
-      const userName = formatName(ctx.from)
-      const userId = ctx.from?.id || 0
-      const chatId = ctx.chat?.id
-      const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup'
-
-      if (!chatId)
-        return
-
-      const session = isGroup ? getGroupChatSession(chatId) : getPrivateChatSession(userId, userName, chatId)
-      if (options?.isAssistant) {
-        session.addAssistantMessage(requestMsgText)
-      }
-      else {
-        session.addUserMessage(requestMsgText, { userId, userName })
-      }
-
-      if (isGroup)
-        log(`[SILENT] ${userName} (${userId}) in ${ctx.chat?.title || 'group'}:`, requestMsgText)
-      else
-        log(`[SILENT] ${userName} (${userId}) in private chat:`, requestMsgText)
-    }
+    bot.on('message').filter(ctx => !!ctx.message, ctx => recordMessage(ctx.msg))
 
     // 当 AI 收到用户的消息时，比如直接私聊，或者是在群里 @ 它，或者回复它
     // 它会通过这个函数给出答复，并且把对话记录存储到内存中
     // LLM 生成的消息会一点一点地发送给用户，就像流式传输一样
-    function handleTextMessage(ctx: Context, option: {
-      addUserMessage: (content: string) => void
-      addAssistantMessage: (content: string) => void
-      session: GroupChatSessionMemory | PrivateChatSessionMemory
-    }) {
+    function replyMessageWithAI(ctx: Context) {
       if (!ctx.message || !ctx.chat?.id)
         return
 
@@ -319,18 +281,16 @@ const app = new Elysia()
             : errorText
 
           // 让 AI 知道自己出错了。用户问的时候，AI 可以回答为什么出错了。
-          option.addAssistantMessage(err instanceof Error
+          recordAssistantText(ctx, err instanceof Error
             ? `${finalErrorMsg}\n\nAlter Ego System Error Log: ${err.toString()}`
-            : finalErrorMsg,
-          )
+            : finalErrorMsg)
           replyMessage.value = finalErrorMsg
         }
         else {
           // 让 AI 知道自己出错了。用户问的时候，AI 可以回答为什么出错了。
-          option.addAssistantMessage(err instanceof Error
+          recordAssistantText(ctx, err instanceof Error
             ? `${errorText}\n\nAlter Ego System Error Log: ${err.toString()}`
-            : errorText,
-          )
+            : errorText)
           replyMessage.value = errorText
         }
       }
@@ -338,8 +298,8 @@ const app = new Elysia()
       invoke(async () => {
         replyMessage.value = '🔵 Connecting...'
 
-        option.addUserMessage(requestMsgText)
-        const chatHistory = option.session.toMessages()
+        recordUserText(ctx, requestMsgText)
+        const chatHistory = getChatHistory(ctx)
         const messages = systemPrompt({ userName, chatType: ctx.chat?.type })
         const memories = getFormatedMemoriesMessage(userId, userName)
         if (memories)
@@ -386,7 +346,7 @@ const app = new Elysia()
 
         const finalResponse = cleanAIResponse(replyTextList.join(''))
         // log(`[REPLY] Alter Ego:`, finalResponse)
-        option.addAssistantMessage(finalResponse)
+        recordAssistantText(ctx, finalResponse)
         replyMessage.value = isWithWorking
           ? `☑️ Done working\n${finalResponse}`
           : finalResponse
