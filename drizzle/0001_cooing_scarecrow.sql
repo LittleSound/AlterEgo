@@ -1,0 +1,1 @@
+ALTER TABLE "memory" ALTER COLUMN "user_id" SET DATA TYPE bigint;

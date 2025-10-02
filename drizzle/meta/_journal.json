@@ -8,6 +8,13 @@
       "when": 1757867230656,
       "tag": "0000_rare_northstar",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1759393237213,
+      "tag": "0001_cooing_scarecrow",
+      "breakpoints": true
     }
   ]
 }
