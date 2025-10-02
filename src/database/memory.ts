@@ -1,4 +1,4 @@
-import { bigint, integer, jsonb, pgTable, varchar } from 'drizzle-orm/pg-core'
+import { bigint, jsonb, pgTable, varchar } from 'drizzle-orm/pg-core'
 import { nanoid } from 'nanoid'
 
 export const memoryTable = pgTable('memory', {

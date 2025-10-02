@@ -31,18 +31,23 @@ export function setupMemoryDatabase(_db: PostgresJsDatabase | null) {
     if (!database)
       return
 
-    const memoryList = await database.select().from(memoryTable)
+    try {
+      const memoryList = await database.select().from(memoryTable)
 
-    for (const memory of memoryList) {
-      if (!Array.isArray(memory.content)) {
-        error(`Memory content for user ${memory.userId} is not an array, skipping...`)
-        return
+      for (const memory of memoryList) {
+        if (!Array.isArray(memory.content)) {
+          error(`Memory content for user ${memory.userId} is not an array, skipping...`)
+          continue
+        }
+        const existingMemory = memoryStorage.get(memory.userId) || []
+        existingMemory.push(...memory.content)
+        memoryStorage.set(memory.userId, existingMemory)
       }
-      const existingMemory = memoryStorage.get(memory.userId) || []
-      existingMemory.push(...memory.content)
-      memoryStorage.set(memory.userId, existingMemory)
+      isMemorySynchronized = true
     }
-    isMemorySynchronized = true
+    catch (err) {
+      error('Failed to load memories from database:', err)
+    }
   })
 }
 
@@ -90,19 +95,24 @@ export function addMemoryByUserId(userId: number, memoryItem: MemoryItem) {
     if (!database)
       return
 
-    const now = Date.now()
-    await database.insert(memoryTable).values({
-      userId,
-      content: memories,
-      createdAt: now,
-      updatedAt: now,
-    }).onConflictDoUpdate({
-      target: memoryTable.userId,
-      set: {
+    try {
+      const now = Date.now()
+      await database.insert(memoryTable).values({
+        userId,
         content: memories,
+        createdAt: now,
         updatedAt: now,
-      },
-    })
+      }).onConflictDoUpdate({
+        target: memoryTable.userId,
+        set: {
+          content: memories,
+          updatedAt: now,
+        },
+      })
+    }
+    catch (err) {
+      error('Failed to save memory to database:', err)
+    }
   })
 }
 
