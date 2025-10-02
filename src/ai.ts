@@ -92,19 +92,34 @@ export function replyMessageWithAI(options: {
     }
 
     async function newMessage(newValue: string) {
-      // 如果是 @ 或回复，则回复原消息
-      const shouldReplyToMessage = requestMsg?.text?.includes('@') || requestMsg?.reply_to_message
-      theMsg = await ctx.reply(newValue, {
-        reply_parameters: shouldReplyToMessage && requestMsg?.message_id
-          ? { message_id: requestMsg.message_id }
-          : undefined,
-        parse_mode: 'HTML',
-      })
+      try {
+        // 如果是 @ 或回复，则回复原消息
+        const shouldReplyToMessage = requestMsg?.text?.includes('@') || requestMsg?.reply_to_message
+        theMsg = await ctx.reply(newValue, {
+          reply_parameters: shouldReplyToMessage && requestMsg?.message_id
+            ? { message_id: requestMsg.message_id }
+            : undefined,
+          parse_mode: 'HTML',
+        })
+      }
+      catch (err) {
+        // 用户可能屏蔽了机器人，或其他发送消息失败的情况
+        if (err instanceof GrammyError && err.error_code === 403) {
+          error('User blocked the bot:', userId)
+          return
+        }
+        throw err
+      }
     }
 
     async function editMessage(newValue: string, oldValue: string) {
       if (newValue === oldValue)
         return
+
+      if (!theMsg) {
+        error('Cannot edit message: theMsg is undefined')
+        return
+      }
 
       try {
         await ctx.api.editMessageText(
