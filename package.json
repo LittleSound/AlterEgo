@@ -1,6 +1,6 @@
 {
-  "name": "telegram-ai-bot",
-  "version": "1.0.50",
+  "name": "alter-ego-telegram-ai-bot",
+  "version": "1.0.51",
   "module": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
