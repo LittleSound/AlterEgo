@@ -99,6 +99,7 @@ OPENAI_BASE_URL=https://api.openai.com/v1/
    - **搜索** (`search`): 通过 Jina AI 搜索网页
    - **记忆** (`remember`): 将重要信息存储到长期记忆
    - **日历创建** (`create_calendar_event`): 创建 .ics 日历文件并发送给用户
+   - **文件创建** (`create_file`): 创建任意文件并发送给用户
 
 5. **聊天记忆功能**
    - 按用户和日期存储对话历史
@@ -138,6 +139,9 @@ OPENAI_BASE_URL=https://api.openai.com/v1/
   - AI 可以创建 .ics 日历文件并通过 Telegram 发送给用户
   - 支持自定义时区、地点、描述等信息
   - 生成的日历文件可直接导入到各种日历应用
+  - 新增文件创建工具 (`create_file`)
+  - AI 可以创建任意类型的文件（如 Markdown、文本、代码等）并发送给用户
+  - 支持自定义文件名和文件内容
 
 - **2025-09-04**:
   - 项目初始化

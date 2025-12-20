@@ -9,6 +9,7 @@ import { defineLogStreamed, error, getVerboseMode, log } from './log'
 import { systemPrompt } from './prompt'
 import { getChatHistory, getSessionMemoryStats, recordAssistantText, recordUserText } from './session'
 import { createCalendar } from './tool/calendar'
+import { createFile } from './tool/file'
 import { getFormatedMemoriesMessage, remember } from './tool/memory'
 import { invoke } from './utils'
 
@@ -210,6 +211,7 @@ export function replyMessageWithAI(options: {
         ...aiTools,
         await remember({ userId }),
         await createCalendar({ ctx, env }),
+        await createFile({ ctx }),
       ],
       onEvent(event) {
         if (!isWithWorking && event.type === 'tool-call-delta') {
