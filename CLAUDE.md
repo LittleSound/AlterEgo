@@ -93,11 +93,19 @@ OPENAI_BASE_URL=https://api.openai.com/v1/
    - 流式响应：`streamText()`
    - 支持任何 OpenAI 兼容 API
 
-4. **聊天记忆功能**
+4. **AI Tools (Function Calling)**
+   - **天气查询** (`weather`): 通过 Open-Meteo API 查询天气
+   - **网页浏览** (`browse`): 通过 Jina AI 读取网页内容
+   - **搜索** (`search`): 通过 Jina AI 搜索网页
+   - **记忆** (`remember`): 将重要信息存储到长期记忆
+   - **日历创建** (`create_calendar_event`): 创建 .ics 日历文件并发送给用户
+
+5. **聊天记忆功能**
    - 按用户和日期存储对话历史
    - 每个会话最多20条消息
    - 自动清理7天前的旧会话
    - 内存使用统计
+   - 支持长期记忆存储（通过数据库）
 
 ## 📋 开发注意事项
 
@@ -124,6 +132,12 @@ OPENAI_BASE_URL=https://api.openai.com/v1/
 - [xsAI GitHub](https://github.com/moeru-ai/xsai)
 
 ## 📝 更新记录
+
+- **2025-12-20**:
+  - 新增日历创建工具 (`create_calendar_event`)
+  - AI 可以创建 .ics 日历文件并通过 Telegram 发送给用户
+  - 支持自定义时区、地点、描述等信息
+  - 生成的日历文件可直接导入到各种日历应用
 
 - **2025-09-04**:
   - 项目初始化
