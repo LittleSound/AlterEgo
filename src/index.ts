@@ -25,10 +25,20 @@ const app = new Elysia()
     if (theDatabase) {
       return { database: theDatabase }
     }
-    const { database } = setupDatabase({ databaseUrl: env.POSTGRESQL_DATABASE_URL })
-    theDatabase = database
-    setupMemoryDatabase(database)
-    return { database }
+    try {
+      const { database } = setupDatabase({ databaseUrl: env.POSTGRESQL_DATABASE_URL })
+      theDatabase = database
+      setupMemoryDatabase(database)
+      return { database }
+    }
+    catch (err) {
+      // Log the error and continue without database
+      console.error('[ERROR]: Failed to connect to database:', err)
+      if (theDatabase === null && !theDatabase) {
+        setupMemoryDatabase(null)
+      }
+      return { database: null }
+    }
   })
   // setup app status
   .derive(({ env }) => {
