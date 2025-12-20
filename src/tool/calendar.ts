@@ -1,8 +1,8 @@
 import type { Context } from 'grammy'
-import type { InputFile } from 'grammy/types'
 import type { AppEnv } from '../env'
-import * as v from 'valibot'
+import { InputFile } from 'grammy'
 
+import * as v from 'valibot'
 import { generateText, tool } from 'xsai'
 import { error, log } from '../log'
 import { recordAssistantText } from '../session'
@@ -103,14 +103,17 @@ export async function createCalendar(option: { ctx: Context, env?: AppEnv }) {
         const safeTitle = title.replace(/[^a-z0-9\u4E00-\u9FA5]/gi, '_').substring(0, 50)
         const filename = `${safeTitle}_${start.toISOString().split('T')[0]}.ics`
 
-        // Send the .ics file via Telegram
-        const blob = new Blob([icsContent], { type: 'text/calendar' })
-        const file = new File([blob], filename, { type: 'text/calendar' })
-
         // Generate AI description for the caption
         const aiDescription = await generateEventDescription(title, startTime, endTime, location || '', timezone, option.env)
 
-        await option.ctx.replyWithDocument(file as unknown as InputFile, {
+        // Send the .ics file via Telegram
+        // Convert to Uint8Array for grammY compatibility
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
+        const arrayBuffer = await blob.arrayBuffer()
+        const uint8Array = new Uint8Array(arrayBuffer)
+        const file = new InputFile(uint8Array, filename)
+
+        await option.ctx.replyWithDocument(file, {
           caption: `${aiDescription}`,
         })
         recordAssistantText(option.ctx, `[Tools Info: Calendar sent.] \n${aiDescription}`)
