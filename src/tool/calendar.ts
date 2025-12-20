@@ -40,13 +40,13 @@ Make it concise and informative. Use emojis if appropriate. Focus on the essence
 
 export async function createCalendar(option: { ctx: Context, env?: AppEnv }) {
   return await tool({
-    name: 'calendar',
-    description: 'Create an .ics calendar event file and send it to the user via Telegram. The user can import this file into their calendar app (Google Calendar, Apple Calendar, Outlook, etc.).',
+    name: 'schedule',
+    description: 'Create an .ics calendar event file and send it to the user via Telegram. When users wants to do something in the future, create a schedule. Ask the user or search to find schedule information.',
     parameters: v.object({
       title: v.pipe(
         v.string(),
         v.minLength(1),
-        v.description('The event title/summary (e.g., "Apple Event", "Team Meeting").'),
+        v.description('title/summary (e.g., "Apple Event", "Team Meeting").'),
       ),
       startTime: v.pipe(
         v.string(),
@@ -58,15 +58,15 @@ export async function createCalendar(option: { ctx: Context, env?: AppEnv }) {
       ),
       timezone: v.pipe(
         v.string(),
-        v.description('IANA timezone identifier (e.g., "Asia/Shanghai", "America/New_York", "Europe/London"). If you don\'t know, ask the user.'),
+        v.description('IANA timezone identifier (e.g., "Asia/Shanghai", "America/New_York", "Europe/London"). If you don\'t know, ask the user or search'),
       ),
-      location: v.optional(v.pipe(
-        v.string(),
-        v.description('Event location (e.g., "上海市徐汇区西岸国际会议中心", "Online", "Conference Room A").'),
-      )),
       description: v.optional(v.pipe(
         v.string(),
         v.description('Detailed event description with key information, links, or notes.'),
+      )),
+      location: v.optional(v.pipe(
+        v.string(),
+        v.description('location (e.g., "上海市徐汇区西岸国际会议中心", "Online", "Conference Room A").'),
       )),
     }),
     execute: async ({ title, startTime, endTime, location, description, timezone = 'Asia/Shanghai' }) => {
