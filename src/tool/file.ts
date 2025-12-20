@@ -8,7 +8,9 @@ import { recordAssistantText } from '../session'
 export async function createFile(option: { ctx: Context }) {
   return await tool({
     name: 'create_file',
-    description: 'Create a file with specified content and send it to the user via Telegram. Use this when users want to create, download, or receive files like markdown documents, text files, code files, etc.',
+    description: 'Create a file with specified content and send it to the user via Telegram.'
+      + ' Use this when users want to create, download, or receive files like markdown documents.'
+      + ' Some formats use plain text encoding, like markdown, ics, csv, json, xml, yaml, toml, ini, latex, html, etc.',
     parameters: v.object({
       filename: v.pipe(
         v.string(),
