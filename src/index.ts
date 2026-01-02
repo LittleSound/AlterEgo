@@ -14,6 +14,7 @@ import { getMemories, getMemorySyncStatus, setMaxMemoryCount, setupMemoryDatabas
 let theBot: Bot
 let theDatabase: PostgresJsDatabase | null = null
 let theAiTools: ReturnType<typeof setupTools> extends Promise<infer R> ? R : never
+let webhookInitialized = false
 
 const app = new Elysia()
   .use(appEnvConfig)
@@ -57,7 +58,29 @@ const app = new Elysia()
     if (theBot) {
       return { bot: theBot }
     }
+    const botStartTime = Date.now()
     const bot = theBot = new Bot(env.TELEGRAM_BOT_TOKEN)
+
+    // 丢弃启动前的群聊历史消息，避免噪音
+    bot.use((ctx, next) => {
+      const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup'
+      const msgDate = ctx.msg?.date
+      if (isGroup && msgDate && msgDate * 1000 < botStartTime) {
+        recordMessage(ctx.msg)
+        return
+      }
+      return next()
+    })
+
+    if (env.TELEGRAM_WEBHOOK_URL && !webhookInitialized) {
+      bot.api.setWebhook(env.TELEGRAM_WEBHOOK_URL, {
+        drop_pending_updates: env.TELEGRAM_DROP_PENDING_UPDATES,
+      }).then(() => {
+        webhookInitialized = true
+      }).catch((err) => {
+        console.error('[ERROR]: Failed to set webhook:', err)
+      })
+    }
 
     bot.command('start', (ctx) => {
       ctx.reply(convertToTelegramHtml('🤖 Hello. Hello. I am Alter Ego! I am a Chat Bot. You can say Hi with me.'), { parse_mode: 'HTML' })

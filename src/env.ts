@@ -15,6 +15,16 @@ const envSchema = {
     error: 'A valid Telegram bot token is required!',
   }),
 
+  TELEGRAM_WEBHOOK_URL: t.String({
+    default: '',
+    description: 'Public webhook URL for Telegram callbacks',
+  }),
+
+  TELEGRAM_DROP_PENDING_UPDATES: t.Boolean({
+    default: false,
+    description: 'Drop pending updates when registering webhook',
+  }),
+
   // Models
   AI_LLM_DEFAULT_MODEL: t.String({
     default: 'openai/gpt-5',
